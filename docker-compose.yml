@@ -1,0 +1,55 @@
+# ============================================
+# WORDSAGE - PRODUCTION DOCKER COMPOSE
+# ============================================
+# Simple, production-ready Docker Compose
+# 
+# Usage:
+#   1. Set values in ./backend/.env and ./frontend/.env
+#   2. Run: docker compose up -d --build
+# ============================================
+
+services:
+  backend:
+    build: ./backend
+    image: wordsage/backend:latest
+    container_name: wordsage-backend
+    restart: unless-stopped
+    ports:
+      - "4000:4000"
+    env_file:
+      - ./backend/.env
+    networks:
+      - wordsage-net
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:4000/api/health"]
+      interval: 30s
+      timeout: 10s
+      start_period: 60s
+      retries: 3
+
+  frontend:
+    build: ./frontend
+    image: wordsage/frontend:latest
+    container_name: wordsage-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    env_file:
+      - ./frontend/.env
+    environment:
+      - BACKEND_URL=http://wordsage-backend:4000
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - wordsage-net
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:3000"]
+      interval: 30s
+      timeout: 10s
+      start_period: 30s
+      retries: 3
+
+networks:
+  wordsage-net:
+    driver: bridge

@@ -1,0 +1,16 @@
+# General
+.DS_Store
+*.log
+node_modules
+.env
+.env.production
+.env.local
+.env1
+# IDEs
+.vscode
+.idea
+*.swp
+*.swo
+
+# OS
+Thumbs.db

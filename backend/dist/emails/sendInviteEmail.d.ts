@@ -1,0 +1,2 @@
+export declare const sendTeamInviteEmail: (toEmail: string, invitedBy: string, teamName: string, acceptUrl: string, rejectUrl: string) => Promise<import("resend").CreateEmailResponse>;
+//# sourceMappingURL=sendInviteEmail.d.ts.map
