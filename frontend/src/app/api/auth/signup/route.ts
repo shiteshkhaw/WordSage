@@ -13,8 +13,13 @@ export async function POST(req: Request) {
         }
 
         // Call backend API to create user
-        // Use BACKEND_URL (runtime, for Docker) or NEXT_PUBLIC_API_URL (build-time)
-        const backendUrl = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_API_URL!;
+        // Use BACKEND_URL (runtime, for Docker)
+        const backendUrl = process.env.BACKEND_URL;
+        if (!backendUrl) {
+            console.error("❌ BACKEND_URL is missing in API route");
+            return NextResponse.json({ error: "Server Configuration Error" }, { status: 500 });
+        }
+
         const response = await fetch(`${backendUrl}/api/auth/signup`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },

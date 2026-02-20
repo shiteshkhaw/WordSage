@@ -9,9 +9,12 @@ if (!NEXTAUTH_SECRET) {
     console.error("❌ NEXTAUTH_SECRET is not set. Authentication will fail.");
 }
 
-// For server-side auth calls, use BACKEND_URL (Docker runtime) or NEXT_PUBLIC_API_URL
-// No fallback - must be set in .env
-const API_URL = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_API_URL!;
+// For server-side auth calls, use BACKEND_URL (Docker runtime)
+// STRICT MODE: No fallback to client-side vars.
+const API_URL = process.env.BACKEND_URL;
+if (!API_URL) {
+    throw new Error("❌ BACKEND_URL is not set in environment. Required for server-side auth.");
+}
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
     providers: [

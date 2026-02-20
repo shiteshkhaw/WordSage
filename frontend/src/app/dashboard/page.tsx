@@ -5,394 +5,630 @@ import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { apiFetch } from "@/lib/api";
 import { useRouter } from "next/navigation";
-import { motion, AnimatePresence } from "framer-motion";
 
-interface Team {
+// Types
+interface UserProfile {
   id: string;
-  name: string;
-  owner_id: string;
+  coins_balance: number;
+  total_ai_requests: number;
+  words_processed: number;
+  login_streak: number;
   subscription_tier: string;
-  max_members: number;
-  created_at: string;
-  member_count?: number;
-  role?: string;
+  referral_code: string;
+  total_referrals: number;
+  [key: string]: any;
 }
 
-export default function TeamsPage() {
+interface Document {
+  id: string;
+  title: string;
+  updated_at: string;
+  word_count: number;
+}
+
+interface CoinTransaction {
+  id: string;
+  action: string;
+  coins_used: number;
+  created_at: string;
+  details?: any;
+}
+
+interface TeamInvitation {
+  id: string;
+  team_id: string;
+  status: string;
+  invited_at: string;
+  teams: {
+    name?: string | null;
+  } | null;
+}
+
+export default function DashboardHome() {
   const { data: session, status } = useSession();
   const user = session?.user;
-  const [teams, setTeams] = useState<Team[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [newTeamName, setNewTeamName] = useState("");
-  const [creating, setCreating] = useState(false);
-  const [animateCards, setAnimateCards] = useState(false);
-
-  // Delete-related states
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [teamToDelete, setTeamToDelete] = useState<Team | null>(null);
-  const [deleteConfirmText, setDeleteConfirmText] = useState("");
-  const [deleting, setDeleting] = useState(false);
-
   const router = useRouter();
 
-  useEffect(() => {
-    loadUser();
-    const t = setTimeout(() => setAnimateCards(true), 200);
-    return () => clearTimeout(t);
-  }, [session]);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [documents, setDocuments] = useState<Document[]>([]);
+  const [recentTransactions, setRecentTransactions] = useState<CoinTransaction[]>([]);
+  const [pendingInvites, setPendingInvites] = useState<TeamInvitation[]>([]);
 
-  const loadUser = async () => {
+  const [animateStats, setAnimateStats] = useState(false);
+  const [dateTime, setDateTime] = useState("");
+  const [loading, setLoading] = useState(true);
+
+  const [copiedReferral, setCopiedReferral] = useState(false);
+
+  useEffect(() => {
+    // Auth Check
+    if (status === "loading") return;
+    if (!user) {
+      router.push("/login");
+      return;
+    }
+
+    // Initial Load
+    loadData();
+    updateDateTime();
+    setTimeout(() => setAnimateStats(true), 200);
+
+    const dateInterval = setInterval(updateDateTime, 60000);
+    const pollInterval = setInterval(loadData, 10000); // Poll every 10s
+
+    return () => {
+      clearInterval(dateInterval);
+      clearInterval(pollInterval);
+    };
+  }, [user, status]);
+
+  const loadData = async () => {
     try {
-      if (status === "loading") return;
-      if (user) {
-        await loadTeams();
-      } else {
-        router.push("/login");
-      }
-    } catch (err) {
-      console.error("loadUser error:", err);
-    } finally {
+      // 1. Profile & Stats
+      const profileRes = await apiFetch<{ data: UserProfile }>('/api/profile');
+      if (profileRes?.data) setProfile(profileRes.data);
+
+      // 2. Recent Documents
+      const docsRes = await apiFetch<{ documents: Document[] }>('/api/documents');
+      if (docsRes?.documents) setDocuments(docsRes.documents.slice(0, 5));
+
+      // 3. Transactions
+      const transRes = await apiFetch<{ transactions: CoinTransaction[] }>('/api/transactions');
+      if (transRes?.transactions) setRecentTransactions(transRes.transactions.slice(0, 10));
+
+      // 4. Pending Invites
+      const invitesRes = await apiFetch<{ data: TeamInvitation[] }>('/api/teams/invites');
+      if (invitesRes?.data) setPendingInvites(invitesRes.data);
+
+      setLoading(false);
+    } catch (error) {
+      console.error("Dashboard load error:", error);
       setLoading(false);
     }
   };
 
-  const loadTeams = async () => {
+  const acceptInvitation = async (teamId: string, inviteId: string) => {
     try {
-      const response = await apiFetch<{ teams?: Team[] }>('/api/teams');
-      // Backend returns { teams: [...] }, not { data: [...] }
-      if (response?.teams) {
-        setTeams(response.teams);
-      } else if (Array.isArray(response)) {
-        setTeams(response);
-      } else {
-        setTeams([]);
-      }
-    } catch (err) {
-      console.error("loadTeams error:", err);
-      setTeams([]);
-    }
-  };
-
-  const createTeam = async () => {
-    if (!newTeamName.trim() || !user) return;
-
-    setCreating(true);
-    try {
-      const response = await apiFetch<{ success?: boolean; team?: Team; error?: string }>('/api/teams', {
-        method: 'POST',
-        body: JSON.stringify({ name: newTeamName }),
+      const response = await apiFetch<{ success: boolean; error?: string }>(`/api/teams/${teamId}/accept`, {
+        method: 'POST'
       });
-
-      if (response?.success && !response.error) {
-        setShowCreateModal(false);
-        setNewTeamName("");
-        await loadTeams();
+      if (response?.success) {
+        alert('✅ Successfully joined the team!');
+        loadData(); // Refresh all
       } else {
-        alert(`❌ Error: ${response?.error || "Could not create team"}`);
+        alert(`❌ Error: ${response?.error || 'Failed to join'}`);
       }
-    } catch (err) {
-      console.error("createTeam error:", err);
-      alert("❌ Failed to create team");
-    } finally {
-      setCreating(false);
+    } catch (error) {
+      console.error('Accept error:', error);
+      alert('❌ Failed to accept invitation');
     }
   };
 
-  // Delete flow
-  const openDeleteModal = (e: React.MouseEvent, team: Team) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setTeamToDelete(team);
-    setDeleteConfirmText("");
-    setShowDeleteModal(true);
-  };
-
-  const deleteTeam = async () => {
-    if (!teamToDelete || deleteConfirmText.toLowerCase() !== "delete my team") {
-      alert("Type 'delete my team' exactly to confirm.");
-      return;
-    }
-    setDeleting(true);
+  const rejectInvitation = async (teamId: string, inviteId: string) => {
     try {
-      const response = await apiFetch<{ success?: boolean; error?: string }>(`/api/teams/${teamToDelete.id}`, {
-        method: 'DELETE',
+      const response = await apiFetch<{ success: boolean; error?: string }>(`/api/teams/${teamId}/reject`, {
+        method: 'POST'
       });
-
-      if (response?.success && !response.error) {
-        setShowDeleteModal(false);
-        setDeleteConfirmText("");
-        setTeamToDelete(null);
-        await loadTeams();
+      if (response?.success) {
+        alert('✅ Invitation declined');
+        loadData();
       } else {
-        alert("Error: " + (response?.error || "Failed to delete team"));
+        alert(`❌ Error: ${response?.error || 'Failed'}`);
       }
-    } catch (err) {
-      console.error("deleteTeam error:", err);
-      alert("Failed to delete team");
-    } finally {
-      setDeleting(false);
+    } catch (error) {
+      console.error('Reject error:', error);
+      alert('❌ Failed to reject invitation');
     }
+  };
+
+  const updateDateTime = () => {
+    const now = new Date();
+    const formatter = new Intl.DateTimeFormat("en-US", {
+      weekday: "long",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+    setDateTime(formatter.format(now));
+  };
+
+  // Helpers
+  const copyReferralLink = () => {
+    const code = profile?.referral_code || "";
+    const referralUrl = `${window.location.origin}/signup?ref=${code}`;
+    navigator.clipboard.writeText(referralUrl);
+    setCopiedReferral(true);
+    setTimeout(() => setCopiedReferral(false), 2000);
+  };
+
+  const shareViaEmail = () => {
+    const code = profile?.referral_code || "";
+    const referralUrl = `${window.location.origin}/signup?ref=${code}`;
+    const subject = "Join WordSage - Get 25 Bonus Coins!";
+    const body = `Hey! I'm using WordSage for AI-powered writing and it's amazing. Join using my referral link and get 25 bonus coins:\n\n${referralUrl}`;
+    window.location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  };
+
+  const shareViaWhatsApp = () => {
+    const code = profile?.referral_code || "";
+    const referralUrl = `${window.location.origin}/signup?ref=${code}`;
+    const message = `Hey! I'm using WordSage for AI-powered writing. Join using my referral code ${code} and get 25 bonus coins! ${referralUrl}`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
+  };
+
+  const getTransactionIcon = (action: string) => {
+    const a = action.toLowerCase();
+    if (a.includes('bonus') || a.includes('referral')) return '🎁';
+    if (a.includes('purchase')) return '💳';
+    if (a.includes('grammar')) return '✅';
+    if (a.includes('improve')) return '📝';
+    if (a.includes('rewrite')) return '🔄';
+    if (a.includes('summarize')) return '📊';
+    return '🪙';
+  };
+
+  const greeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return "Good Morning";
+    if (hour < 18) return "Good Afternoon";
+    return "Good Evening";
+  };
+
+  const getDocumentIcon = (title: string) => {
+    const t = title.toLowerCase();
+    if (t.includes('email')) return "✉️";
+    if (t.includes('blog')) return "📝";
+    if (t.includes('report')) return "📊";
+    return "📄";
+  };
+
+  const AnimatedNumber = ({ value }: { value: number }) => {
+    const [displayValue, setDisplayValue] = useState(0);
+    useEffect(() => {
+      if (!animateStats) return;
+      let current = 0;
+      const increment = Math.max(1, value / 30);
+      const interval = setInterval(() => {
+        current += increment;
+        if (current >= value) {
+          setDisplayValue(value);
+          clearInterval(interval);
+        } else {
+          setDisplayValue(Math.floor(current));
+        }
+      }, 30);
+      return () => clearInterval(interval);
+    }, [animateStats, value]);
+    return <>{displayValue}</>;
   };
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-[#F8FAFC]">
-        <div className="animate-spin rounded-full h-12 w-12 border-4 border-indigo-100 border-t-indigo-600"></div>
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-16 w-16 border-4 border-slate-200 border-t-indigo-600"></div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] p-8">
-      <div className="max-w-7xl mx-auto space-y-10">
+    <div className="space-y-12 max-w-7xl mx-auto relative p-6">
 
-        {/* Header */}
-        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-50 via-purple-50 to-blue-50 p-12 border border-indigo-200">
-          <div className="absolute top-0 right-0 w-96 h-96 bg-gradient-to-br from-indigo-100 to-transparent rounded-full blur-3xl opacity-40 -translate-y-1/2 translate-x-1/2"></div>
-          <div className="relative z-10 flex flex-col md:flex-row justify-between items-center gap-6">
+      {/* 1. Pending Invites Section */}
+      {pendingInvites.length > 0 && (
+        <div className="bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 rounded-3xl p-8 border-2 border-indigo-200 shadow-lg">
+          <div className="flex items-center justify-between mb-6">
             <div>
-              <h1 className="text-6xl font-bold text-slate-900 mb-3 leading-tight">
-                Your <span className="bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">Teams</span> 🤝
-              </h1>
-              <p className="text-lg text-slate-700">
-                Collaborate with your team using AI-powered writing tools and shared style guides
-              </p>
-            </div>
-            <div className="flex gap-4">
-              <button
-                onClick={() => setShowCreateModal(true)}
-                className="px-8 py-4 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl font-semibold hover:shadow-2xl transition-all transform hover:scale-105 inline-flex items-center space-x-2"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                </svg>
-                <span>Create New Team</span>
-              </button>
-              <Link
-                href="/dashboard"
-                className="px-8 py-4 bg-white border-2 border-slate-200 text-slate-700 rounded-xl font-semibold hover:border-indigo-600 hover:text-indigo-600 transition-all inline-flex items-center space-x-2"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                </svg>
-                <span>Back to Dashboard</span>
-              </Link>
+              <h2 className="text-3xl font-bold text-indigo-900 mb-2">📬 Team Invitations</h2>
+              <p className="text-indigo-700">You have {pendingInvites.length} pending team invitation{pendingInvites.length > 1 ? 's' : ''}</p>
             </div>
           </div>
-        </div>
 
-        {/* Teams Grid */}
-        {teams.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {teams.map((team, idx) => (
+          <div className="space-y-4">
+            {pendingInvites.map((invite) => (
               <div
-                key={team.id}
-                onClick={() => router.push(`/dashboard/teams/${team.id}`)}
-                className={`bg-white rounded-2xl p-8 border border-slate-200 hover:border-indigo-400 hover:shadow-xl transition-all transform hover:-translate-y-1 cursor-pointer relative overflow-hidden group ${animateCards ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"
-                  }`}
-                style={{ transition: `all 0.4s ease-out ${idx * 100}ms` }}
+                key={invite.id}
+                className="bg-white rounded-2xl p-6 border-2 border-indigo-200 shadow-md hover:shadow-lg transition-all"
               >
-                <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-indigo-50 to-transparent rounded-full blur-2xl opacity-0 group-hover:opacity-100 transition-opacity"></div>
-
-                <div className="absolute top-4 right-4 z-10">
-                  <span
-                    className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide border ${team.role === "owner"
-                      ? "bg-indigo-50 text-indigo-700 border-indigo-100"
-                      : "bg-slate-50 text-slate-700 border-slate-100"
-                      }`}
-                  >
-                    {team.role === "owner" ? "👑 Owner" : `👤 ${team.role}`}
-                  </span>
-                </div>
-
-                <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center mb-6 shadow-lg text-white font-bold text-2xl">
-                  {team.name.substring(0, 2).toUpperCase()}
-                </div>
-
-                <h3 className="text-2xl font-bold text-slate-900 mb-2 group-hover:text-indigo-700 transition-colors">{team.name}</h3>
-                <p className="text-sm text-slate-500 mb-6">
-                  {team.member_count || 0} member{team.member_count !== 1 ? "s" : ""}
-                </p>
-
-                <div className="grid grid-cols-2 gap-4 mb-6">
-                  <div className="bg-slate-50 rounded-xl p-3 border border-slate-100">
-                    <p className="text-xs text-slate-500 font-bold uppercase mb-1">Tier</p>
-                    <p className="text-sm font-bold text-indigo-700 capitalize">{team.subscription_tier}</p>
+                <div className="flex items-center justify-between flex-wrap gap-4">
+                  <div className="flex items-center space-x-4">
+                    <div className="w-14 h-14 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white">
+                      <span className="text-3xl">👥</span>
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-xl text-slate-900">
+                        {invite?.teams?.name || "Unknown Team"}
+                      </h3>
+                      <p className="text-sm text-slate-600">
+                        Invited {invite?.invited_at ? new Date(invite.invited_at).toLocaleDateString() : ""}
+                      </p>
+                    </div>
                   </div>
-                  <div className="bg-slate-50 rounded-xl p-3 border border-slate-100">
-                    <p className="text-xs text-slate-500 font-bold uppercase mb-1">Created</p>
-                    <p className="text-sm font-bold text-slate-700">{new Date(team.created_at).toLocaleDateString()}</p>
-                  </div>
-                </div>
-
-                {/* Actions */}
-                <div className="flex items-center justify-between pt-4 border-t border-slate-100 mt-auto">
-                  <span className="text-sm font-bold text-indigo-600 group-hover:translate-x-1 transition-transform flex items-center gap-1">
-                    Open Dashboard <span className="text-lg">→</span>
-                  </span>
-
-                  {team.role === "owner" && (
+                  <div className="flex gap-3">
                     <button
-                      onClick={(e) => openDeleteModal(e, team)}
-                      className="p-2 text-slate-300 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all z-20"
-                      title="Delete Team"
+                      onClick={() => acceptInvitation(invite.team_id, invite.id)}
+                      className="px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-xl font-semibold hover:shadow-lg transition-all inline-flex items-center space-x-2"
                     >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                      <span>Accept</span>
                     </button>
-                  )}
+                    <button
+                      onClick={() => rejectInvitation(invite.team_id, invite.id)}
+                      className="px-6 py-3 border-2 border-slate-300 text-slate-700 rounded-xl font-semibold hover:bg-slate-100 transition-all"
+                    >
+                      Decline
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}
           </div>
-        ) : (
-          <div className="bg-white rounded-3xl p-16 border-2 border-dashed border-slate-300 text-center">
-            <div className="w-24 h-24 bg-indigo-50 rounded-full flex items-center justify-center mx-auto mb-6 text-4xl shadow-sm">
-              🚀
-            </div>
-            <h3 className="text-2xl font-bold text-slate-900 mb-2">No teams yet</h3>
-            <p className="text-slate-600 mb-8 max-w-md mx-auto">
-              Create your first team to start collaborating with others using AI-powered writing tools and shared style guides
-            </p>
-            <button
-              onClick={() => setShowCreateModal(true)}
-              className="px-8 py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 hover:shadow-lg transition-all"
-            >
-              Create Your First Team
-            </button>
-          </div>
-        )}
+        </div>
+      )}
 
-        {/* Create Team Modal */}
-        <AnimatePresence>
-          {showCreateModal && (
-            <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-              <motion.div
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.95 }}
-                className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden"
-              >
-                <div className="p-8 bg-gradient-to-br from-white to-slate-50">
-                  <div className="flex justify-between items-start mb-6">
-                    <div>
-                      <h2 className="text-2xl font-bold text-slate-900">Create Team</h2>
-                      <p className="text-slate-500 text-sm mt-1">Start a new workspace for your brand.</p>
-                    </div>
-                    <button
-                      onClick={() => setShowCreateModal(false)}
-                      className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-400 hover:text-slate-600"
-                    >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                    </button>
-                  </div>
-
-                  <div className="space-y-6">
-                    <div>
-                      <label className="block text-sm font-bold text-slate-700 mb-2">Team Name</label>
-                      <input
-                        type="text"
-                        value={newTeamName}
-                        onChange={(e) => setNewTeamName(e.target.value)}
-                        placeholder="e.g. Marketing Squad"
-                        className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:border-indigo-600 focus:outline-none text-slate-900 text-lg placeholder:text-slate-300 transition-all bg-white"
-                        autoFocus
-                        onKeyDown={(e) => e.key === 'Enter' && createTeam()}
-                      />
-                    </div>
-
-                    <div className="flex gap-3 pt-2">
-                      <button
-                        onClick={createTeam}
-                        disabled={creating || !newTeamName.trim()}
-                        className="flex-1 px-6 py-3.5 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl font-bold hover:shadow-lg hover:shadow-indigo-200 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex justify-center items-center gap-2"
-                      >
-                        {creating ? (
-                          <>
-                            <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent" />
-                            <span>Creating...</span>
-                          </>
-                        ) : (
-                          <span>Create Team</span>
-                        )}
-                      </button>
-                    </div>
-                  </div>
+      {/* 2. Welcome Header */}
+      <div className="space-y-6">
+        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-50 via-purple-50 to-blue-50 p-12 border border-indigo-200">
+          <div className="absolute top-0 right-0 w-96 h-96 bg-gradient-to-br from-indigo-100 to-transparent rounded-full blur-3xl opacity-40 -translate-y-1/2 translate-x-1/2"></div>
+          <div className="relative z-10">
+            <h1 className="text-5xl md:text-6xl font-bold text-slate-900 mb-3 leading-tight">
+              {greeting()}, <span className="bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">{user?.email?.split("@")[0]}</span> 👋
+            </h1>
+            <div className="flex items-center space-x-4 mb-6">
+              <p className="text-lg text-slate-700 font-light">
+                Continue refining your craft with AI-powered insights
+              </p>
+              {profile?.login_streak && profile.login_streak > 0 && (
+                <div className="inline-flex items-center space-x-2 bg-orange-100 px-4 py-2 rounded-full border border-orange-200">
+                  <span className="text-2xl animate-pulse">🔥</span>
+                  <span className="text-sm font-bold text-orange-700">{profile.login_streak} day streak!</span>
                 </div>
-              </motion.div>
+              )}
             </div>
-          )}
-        </AnimatePresence>
+            <p className="text-sm text-slate-600">
+              🕘 {dateTime} • <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full animate-pulse">🟢 Auto-refresh</span>
+            </p>
+          </div>
+        </div>
 
-        {/* Delete Confirmation Modal */}
-        <AnimatePresence>
-          {showDeleteModal && teamToDelete && (
-            <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-              <motion.div
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.95 }}
-                className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden border-2 border-red-100"
+        {/* Action Buttons */}
+        <div className="flex flex-col sm:flex-row gap-4">
+          <Link
+            href="/editor"
+            className="flex-1 px-8 py-4 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl font-semibold hover:shadow-2xl transition-all transform hover:scale-105 text-center inline-flex items-center justify-center space-x-2 group"
+          >
+            <svg className="w-5 h-5 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
+            </svg>
+            <span>Start Writing</span>
+          </Link>
+          <Link
+            href="/dashboard/analytics"
+            className="flex-1 px-8 py-4 border-2 border-slate-300 text-slate-700 rounded-xl font-semibold hover:border-indigo-600 hover:text-indigo-600 hover:bg-indigo-50 transition-all text-center inline-flex items-center justify-center space-x-2"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+            </svg>
+            <span>Analytics</span>
+          </Link>
+        </div>
+      </div>
+
+      {/* 3. Stats Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {[
+          {
+            label: "AI Requests Made",
+            value: profile?.total_ai_requests || 0,
+            delta: "Total Lifetime",
+            gradient: "from-blue-500 to-indigo-600",
+            icon: "M13 10V3L4 14h7v7l9-11h-7z",
+          },
+          {
+            label: "Words Enhanced",
+            value: profile?.words_processed || 0,
+            delta: "Total Processed",
+            gradient: "from-purple-500 to-pink-600",
+            icon: "M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z",
+          },
+          {
+            label: "SkillsCoins Balance",
+            value: profile?.coins_balance || 0,
+            delta: "+10 daily login bonus",
+            gradient: "from-orange-500 to-red-600",
+            icon: "M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z",
+          },
+        ].map((stat, idx) => (
+          <div
+            key={idx}
+            className={`bg-gradient-to-br ${stat.gradient} rounded-2xl p-8 text-white shadow-lg hover:shadow-2xl transition-all transform hover:-translate-y-2 border border-white/10 ${animateStats ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"
+              }`}
+            style={{
+              transition: `all 0.6s ease-out ${idx * 100}ms`,
+            }}
+          >
+            <div className="flex items-start justify-between mb-8">
+              <div className="w-14 h-14 rounded-xl bg-white/20 flex items-center justify-center backdrop-blur-md hover:bg-white/30 transition-colors">
+                <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d={stat.icon} />
+                </svg>
+              </div>
+              <div className="text-3xl opacity-20">→</div>
+            </div>
+            <p className="text-white/80 text-sm font-medium mb-2">
+              {stat.label}
+            </p>
+            <p className="text-5xl font-bold mb-2">
+              {animateStats ? <AnimatedNumber value={stat.value} /> : stat.value}
+            </p>
+            <p className="text-xs text-white/70">{stat.delta}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* 4. Referral Section */}
+      <div className="bg-gradient-to-br from-purple-50 via-pink-50 to-purple-50 rounded-3xl p-8 border-2 border-purple-200 shadow-lg">
+        <div className="flex items-center justify-between mb-6 flex-wrap gap-4">
+          <div>
+            <h2 className="text-3xl font-bold text-purple-900 mb-2">🎁 Refer & Earn Coins</h2>
+            <p className="text-purple-700">Invite friends and both of you get bonus coins!</p>
+          </div>
+          <div className="text-center bg-white rounded-2xl p-6 shadow-md min-w-[150px]">
+            <p className="text-sm text-purple-600 font-semibold mb-1">Your Referrals</p>
+            <p className="text-5xl font-bold text-purple-900">{profile?.total_referrals || 0}</p>
+          </div>
+        </div>
+
+        <div className="grid md:grid-cols-2 gap-6 mb-6">
+          <div className="bg-white rounded-2xl p-6 shadow-md">
+            <label className="text-sm font-bold text-purple-900 mb-3 block flex items-center">
+              <span className="text-2xl mr-2">🎟️</span>
+              Your Referral Code
+            </label>
+            <div className="flex items-center space-x-2">
+              <input
+                type="text"
+                value={profile?.referral_code || "Loading..."}
+                readOnly
+                className="flex-1 px-4 py-3 border-2 border-purple-300 rounded-lg bg-purple-50 text-purple-900 font-mono font-bold text-2xl text-center"
+              />
+              <button
+                onClick={copyReferralLink}
+                className="px-6 py-3 bg-purple-600 text-white rounded-lg font-semibold hover:bg-purple-700 transition-all shadow-md hover:shadow-lg"
               >
-                <div className="p-8">
-                  <div className="text-center mb-6">
-                    <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-4">
-                      <svg className="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
-                    </div>
-                    <h2 className="text-2xl font-bold text-slate-900">Delete Team?</h2>
-                    <p className="text-slate-500 mt-2">
-                      Are you sure you want to delete <strong className="text-slate-800">{teamToDelete.name}</strong>?
-                      This action <span className="text-red-600 font-bold">cannot be undone</span>.
+                {copiedReferral ? "✓ Copied!" : "Copy"}
+              </button>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-2xl p-6 shadow-md">
+            <label className="text-sm font-bold text-purple-900 mb-3 block flex items-center">
+              <span className="text-2xl mr-2">🔗</span>
+              Share Your Referral Link
+            </label>
+            <div className="flex items-center space-x-2">
+              <input
+                type="text"
+                value={`${typeof window !== 'undefined' ? window.location.origin : ''}/signup?ref=${profile?.referral_code || ''}`}
+                readOnly
+                className="flex-1 px-4 py-3 border-2 border-purple-300 rounded-lg bg-purple-50 text-purple-700 text-sm truncate"
+              />
+              <button
+                onClick={copyReferralLink}
+                className="px-6 py-3 bg-purple-600 text-white rounded-lg font-semibold hover:bg-purple-700 transition-all shadow-md"
+              >
+                Copy
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap gap-3">
+          <button
+            onClick={shareViaEmail}
+            className="flex-1 min-w-[200px] px-6 py-4 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl font-semibold hover:shadow-xl transition-all flex items-center justify-center space-x-2"
+          >
+            <span>📧 Share via Email</span>
+          </button>
+          <button
+            onClick={shareViaWhatsApp}
+            className="flex-1 min-w-[200px] px-6 py-4 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-xl font-semibold hover:shadow-xl transition-all flex items-center justify-center space-x-2"
+          >
+            <span>💬 Share via WhatsApp</span>
+          </button>
+        </div>
+      </div>
+
+      {/* 5. Recent Activity */}
+      <div className="space-y-6">
+        <h2 className="text-3xl font-bold text-slate-900">💰 Recent Coin Activity</h2>
+        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-lg">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-gradient-to-r from-slate-50 to-slate-100">
+                <tr>
+                  <th className="px-6 py-4 text-left text-sm font-bold text-slate-700">Activity</th>
+                  <th className="px-6 py-4 text-left text-sm font-bold text-slate-700">Date</th>
+                  <th className="px-6 py-4 text-right text-sm font-bold text-slate-700">Coins</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200">
+                {recentTransactions.length > 0 ? (
+                  recentTransactions.map((trans) => (
+                    <tr key={trans.id} className="hover:bg-slate-50 transition-colors">
+                      <td className="px-6 py-4">
+                        <div className="flex items-center space-x-3">
+                          <span className="text-2xl">{getTransactionIcon(trans.action)}</span>
+                          <div>
+                            <p className="font-semibold text-slate-900">
+                              {trans.action.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}
+                            </p>
+                            {trans.details && (
+                              <p className="text-xs text-slate-500">
+                                {trans.details.bonus_type || trans.details.mode || ''}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-sm text-slate-600">
+                        {new Date(trans.created_at).toLocaleDateString()} {new Date(trans.created_at).toLocaleTimeString()}
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <span className={`font-bold text-lg ${trans.coins_used < 0 ? 'text-green-600' : 'text-red-600'}`}>
+                          {trans.coins_used < 0 ? '+' : '-'}{Math.abs(trans.coins_used)}
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={3} className="px-6 py-12 text-center text-slate-500">
+                      No transactions yet. Start using AI features to see your activity here!
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      {/* 6. Quick Actions */}
+      <div className="space-y-6">
+        <h2 className="text-3xl font-bold text-slate-900">Quick Actions</h2>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          {[
+            { icon: "M12 4v16m8-8H4", title: "New Document", href: "/editor", desc: "Start fresh" },
+            { icon: "M9 12l2 2 4-4", title: "Improve Writing", href: "/editor", desc: "Enhance clarity" },
+            { icon: "M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z", title: "Summarize", href: "/editor", desc: "Make concise" },
+            { icon: "M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z", title: "AI Assistant", href: "/editor", desc: "Get help instantly" },
+          ].map((action, idx) => (
+            <Link
+              key={idx}
+              href={action.href}
+              className="bg-white rounded-2xl p-6 border border-slate-200 hover:shadow-lg hover:-translate-y-1 transition-all space-y-4 group cursor-pointer relative overflow-hidden"
+            >
+              <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-indigo-100 to-transparent rounded-full blur-2xl opacity-0 group-hover:opacity-100 transition-opacity"></div>
+              <div className="relative z-10">
+                <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center group-hover:scale-110 transition-transform shadow-md">
+                  <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={action.icon} />
+                  </svg>
+                </div>
+                <div>
+                  <p className="font-semibold text-slate-900 text-sm">
+                    {action.title}
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    {action.desc}
+                  </p>
+                </div>
+              </div>
+            </Link>
+          ))}
+        </div>
+      </div>
+
+      {/* 7. Teams CTA */}
+      <div className="bg-gradient-to-br from-purple-50 via-pink-50 to-purple-50 rounded-3xl p-12 border-2 border-purple-200 shadow-lg">
+        <div className="flex items-center justify-between mb-6 flex-wrap gap-6">
+          <div>
+            <h2 className="text-3xl font-bold text-purple-900 mb-2">👥 Team Collaboration</h2>
+            <p className="text-purple-700">Work with your team using shared style guides</p>
+          </div>
+          <Link
+            href="/dashboard/teams"
+            className="px-8 py-4 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl font-semibold hover:shadow-2xl transition-all transform hover:scale-105 inline-flex items-center space-x-2"
+          >
+            <span>Go to Teams</span>
+          </Link>
+        </div>
+      </div>
+
+      {/* 8. Recent Documents */}
+      <div className="space-y-6">
+        <div className="flex justify-between items-center">
+          <h2 className="text-3xl font-bold text-slate-900">Recent Work</h2>
+        </div>
+
+        {documents.length > 0 ? (
+          <div className="space-y-3">
+            {documents.map((doc, idx) => (
+              <Link
+                key={doc.id}
+                href={`/editor?doc=${doc.id}`}
+                className="bg-white rounded-2xl p-6 border border-slate-200 hover:shadow-lg hover:border-indigo-300 transition-all flex justify-between items-center group cursor-pointer"
+                style={{
+                  animation: `slideIn 0.5s ease-out ${idx * 100}ms both`,
+                }}
+              >
+                <div className="flex-1 flex items-center space-x-4">
+                  <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-indigo-100 to-purple-100 flex items-center justify-center">
+                    <span className="text-2xl">{getDocumentIcon(doc.title)}</span>
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-slate-900 text-base group-hover:text-indigo-600 transition-colors">
+                      {doc.title}
+                    </h3>
+                    <p className="text-xs text-slate-500">
+                      {new Date(doc.updated_at).toLocaleDateString()} • {doc.word_count || 0} words
                     </p>
                   </div>
-
-                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 mb-6">
-                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-2 text-center">
-                      Type <span className="text-slate-800">delete my team</span> to confirm
-                    </label>
-                    <input
-                      type="text"
-                      value={deleteConfirmText}
-                      onChange={(e) => setDeleteConfirmText(e.target.value)}
-                      className="w-full px-4 py-2 border-2 border-slate-300 rounded-lg focus:border-red-500 focus:outline-none text-center font-mono text-slate-900"
-                      placeholder="delete my team"
-                    />
-                  </div>
-
-                  <div className="flex gap-3">
-                    <button
-                      onClick={() => {
-                        setShowDeleteModal(false);
-                        setDeleteConfirmText("");
-                        setTeamToDelete(null);
-                      }}
-                      disabled={deleting}
-                      className="flex-1 px-4 py-3 border-2 border-slate-200 text-slate-700 rounded-xl font-bold hover:bg-slate-50 transition-all disabled:opacity-50"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={deleteTeam}
-                      disabled={deleting || deleteConfirmText.toLowerCase() !== "delete my team"}
-                      className="flex-1 px-4 py-3 bg-red-600 text-white rounded-xl font-bold hover:bg-red-700 hover:shadow-lg hover:shadow-red-200 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex justify-center items-center gap-2"
-                    >
-                      {deleting ? (
-                        <>
-                          <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                          <span>Deleting...</span>
-                        </>
-                      ) : (
-                        <span>Delete Team</span>
-                      )}
-                    </button>
-                  </div>
                 </div>
-              </motion.div>
+                <div className="px-6 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg hover:shadow-lg transition-all font-medium text-sm opacity-0 group-hover:opacity-100">
+                  Open
+                </div>
+              </Link>
+            ))}
+          </div>
+        ) : (
+          <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-2xl p-16 border-2 border-dashed border-indigo-300 text-center space-y-4">
+            <div className="w-16 h-16 rounded-full bg-indigo-100 flex items-center justify-center mx-auto">
+              <span className="text-3xl">📝</span>
             </div>
-          )}
-        </AnimatePresence>
-
+            <div>
+              <p className="text-lg text-slate-700 font-semibold">No documents yet</p>
+              <p className="text-slate-600 mb-6">
+                Create your first document to start your writing journey
+              </p>
+            </div>
+            <Link
+              href="/editor"
+              className="inline-block px-8 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl font-semibold hover:shadow-lg transition-all"
+            >
+              Create Your First Document
+            </Link>
+          </div>
+        )}
       </div>
+
+      <style jsx>{`
+        @keyframes slideIn {
+          from { opacity: 0; transform: translateY(20px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
     </div>
   );
 }

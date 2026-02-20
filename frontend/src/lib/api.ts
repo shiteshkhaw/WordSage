@@ -5,8 +5,8 @@
  * Authentication is handled via cookies or Authorization header.
  */
 
-// Backend URL from environment variable - MUST be set
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL!;
+// Backend API URL from environment variable
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL!;
 
 /**
  * Make an authenticated API request directly to the backend
@@ -26,15 +26,19 @@ export async function apiFetch<T = unknown>(
     : `/api${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
 
   // Call backend directly
-  const backendUrl = `${BACKEND_URL}${normalizedEndpoint}`;
+  const backendUrl = `${API_BASE_URL}${normalizedEndpoint}`;
 
+  // Don't set Content-Type for FormData — browser sets it automatically with the correct multipart boundary
+  const isFormData = options.body instanceof FormData;
   const response = await fetch(backendUrl, {
     ...options,
     credentials: 'include', // Include cookies for authentication
-    headers: {
-      'Content-Type': 'application/json',
-      ...((options.headers as Record<string, string>) || {}),
-    },
+    headers: isFormData
+      ? { ...((options.headers as Record<string, string>) || {}) }
+      : {
+        'Content-Type': 'application/json',
+        ...((options.headers as Record<string, string>) || {}),
+      },
   });
 
   // Handle non-OK responses

@@ -335,7 +335,7 @@ teamsRouter.post('/:teamId/invite', requireAuth, async (req, res) => {
         });
         console.log(`✅ Invitation sent: ${email} → ${team.name} (PENDING)`);
         // Build accept/reject URLs
-        const base = process.env.PUBLIC_APP_URL || "http://localhost:3000";
+        const base = process.env.FRONTEND_URL;
         const acceptUrl = `${base}/dashboard/teams/${teamId}/accept?inv=${newMember.id}`;
         const rejectUrl = `${base}/dashboard/teams/${teamId}/reject?inv=${newMember.id}`;
         // Fetch inviter profile for email

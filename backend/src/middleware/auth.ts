@@ -79,26 +79,43 @@ export async function requireAuth(
     }
 
     // Check for Authorization header
-    const authHeader = req.headers.authorization;
-    if (!authHeader) {
-      return res.status(401).json({
-        error: 'Unauthorized - No authorization header'
-      });
-    }
+    let token = req.headers.authorization;
+    let salt = 'authjs.session-token'; // Default salt for v5
 
-    // Extract token from "Bearer <token>" format
-    const token = authHeader.startsWith('Bearer ')
-      ? authHeader.substring(7)
-      : authHeader;
+    // If no auth header, try cookies
+    if (!token && req.cookies) {
+      // Check priority: Secure authjs > authjs > Secure next-auth > next-auth
+      if (req.cookies['__Secure-authjs.session-token']) {
+        token = req.cookies['__Secure-authjs.session-token'];
+        salt = '__Secure-authjs.session-token';
+      } else if (req.cookies['authjs.session-token']) {
+        token = req.cookies['authjs.session-token'];
+        salt = 'authjs.session-token';
+      } else if (req.cookies['__Secure-next-auth.session-token']) {
+        token = req.cookies['__Secure-next-auth.session-token'];
+        salt = '__Secure-next-auth.session-token';
+      } else if (req.cookies['next-auth.session-token']) {
+        token = req.cookies['next-auth.session-token'];
+        salt = 'next-auth.session-token';
+      }
+    } else if (token) {
+      // Handle Bearer token
+      token = token.startsWith('Bearer ') ? token.substring(7) : token;
+    }
 
     if (!token || token.trim() === '') {
       return res.status(401).json({
-        error: 'Unauthorized - Empty token'
+        error: 'Unauthorized - No token found in header or cookies'
       });
     }
 
     // Decode the NextAuth JWE token
-    const decoded = await decodeNextAuthToken(token);
+    // Note: We need to pass the correct salt corresponding to the cookie name
+    const decoded = await decode({
+      token,
+      secret: NEXTAUTH_SECRET,
+      salt,
+    }) as unknown as { sub?: string; email?: string } | null;
 
     if (!decoded) {
       return res.status(401).json({

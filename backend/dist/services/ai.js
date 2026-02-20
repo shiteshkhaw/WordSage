@@ -35,7 +35,7 @@ function getOpenAIClient() {
             apiKey,
             baseURL: 'https://openrouter.ai/api/v1',
             defaultHeaders: {
-                'HTTP-Referer': process.env.FRONTEND_URL || 'http://localhost:3000',
+                'HTTP-Referer': process.env.FRONTEND_URL,
                 'X-Title': 'WordSage',
             },
         });
@@ -490,6 +490,12 @@ export async function processAIRequest(action, text, tone, mode, customPrompt) {
         if (error.code === 'model_not_found' || error.message?.includes('model')) {
             throw new Error(`AI model "${OPENAI_MODEL}" is not available. Please update OPENAI_MODEL in backend/src/services/ai.ts`);
         }
+        // Handle upstream authentication errors (OpenRouter/OpenAI)
+        // Convert 401/403 from upstream to 502 to avoid logging out the user
+        if (error.status === 401 || error.status === 403) {
+            console.error('Upstream AI Provider Authentication Failed:', error.message);
+            throw new Error(`AI Service Unavailable: Authentication failed with provider. Check server logs.`);
+        }
         throw new Error(`AI processing failed: ${error.message}`);
     }
 }
@@ -734,6 +740,11 @@ If information is missing, indicate with [Author], [Year], etc. placeholders.`,
         // Handle model deprecation specifically
         if (error.code === 'model_not_found' || error.message?.includes('model')) {
             throw new Error(`AI model "${OPENAI_MODEL}" is not available. Please update OPENAI_MODEL in backend/src/services/ai.ts`);
+        }
+        // Handle upstream authentication errors (OpenRouter/OpenAI)
+        if (error.status === 401 || error.status === 403) {
+            console.error('Upstream AI Provider Authentication Failed:', error.message);
+            throw new Error(`AI Service Unavailable: Authentication failed with provider. Check server logs.`);
         }
         throw new Error(`Advanced AI processing failed: ${error.message}`);
     }

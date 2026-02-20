@@ -834,7 +834,7 @@ export default function SettingsPage() {
                   period: "per month",
                   features: ["Unlimited AI requests", "1000 SkillsCoins/month", "Priority support"],
                   current: profile?.subscription_tier === "pro",
-                  razorpayPlanId: process.env.NEXT_PUBLIC_RAZORPAY_PRO_PLAN_ID || "plan_RcMLLxIKTLWQSP",
+                  razorpayPlanId: process.env.NEXT_PUBLIC_RAZORPAY_PRO_PLAN_ID!,
                 },
                 {
                   name: "Team",
@@ -842,7 +842,7 @@ export default function SettingsPage() {
                   period: "per month",
                   features: ["Everything in Pro", "5000 SkillsCoins/month", "Team collaboration"],
                   current: profile?.subscription_tier === "team",
-                  razorpayPlanId: process.env.NEXT_PUBLIC_RAZORPAY_TEAM_PLAN_ID || "plan_RcMMrvRVqUerfl",
+                  razorpayPlanId: process.env.NEXT_PUBLIC_RAZORPAY_TEAM_PLAN_ID!,
                 },
               ].map((plan, idx) => (
                 <div

@@ -1,4 +1,9 @@
 import "dotenv/config";
+import { validateEnv } from "./lib/validate-env";
+
+// Validate environment before starting
+validateEnv();
+
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
@@ -86,6 +91,8 @@ app.use(cors(corsOptions));
 // Explicitly handle preflight for all routes to ensure proper OPTIONS handling
 app.options("*", cors(corsOptions));
 
+import cookieParser from "cookie-parser";
+
 /* ---------------------------------------------
    RAZORPAY WEBHOOK (RAW BODY)
 ---------------------------------------------- */
@@ -94,6 +101,11 @@ app.use(
    "/api/razorpay/webhook",
    express.raw({ type: "application/json" })
 );
+
+/* ---------------------------------------------
+   COOKIE PARSER
+---------------------------------------------- */
+app.use(cookieParser());
 
 /* ---------------------------------------------
    BODY PARSERS

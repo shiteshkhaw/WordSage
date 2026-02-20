@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
+import ReferralSection from '@/components/ReferralSection';
 
 export default function LandingPage() {
   const router = useRouter();
@@ -436,7 +437,7 @@ export default function LandingPage() {
               </span>
               <h3 className="text-2xl font-bold text-gray-900 mb-2">Pro</h3>
               <p className="text-gray-600 text-sm mb-4">Unlock full power</p>
-              <div className="text-5xl font-bold text-gray-900 mb-6">₹2,999<span className="text-lg text-gray-500">/mo</span></div>
+              <div className="text-5xl font-bold text-gray-900 mb-6">₹999<span className="text-lg text-gray-500">/mo</span></div>
               <Link
                 href={user ? "/dashboard/settings?tab=billing#plans" : "/signup"}
                 className="block w-full py-3 px-6 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg font-semibold hover:shadow-xl transition-all text-center mb-6"
@@ -446,7 +447,7 @@ export default function LandingPage() {
               <ul className="space-y-3 text-gray-700">
                 <li className="flex items-start gap-2">
                   <span className="text-green-600 mt-1">✓</span>
-                  <span>Everything in Pro</span>
+                  <span>Everything in Free</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-green-600 mt-1">✓</span>
@@ -556,9 +557,15 @@ export default function LandingPage() {
             ))}
           </div>
         </div>
+
       </section>
 
-      {/* 8. Final CTA */}
+      {/* 8. Referral Section (New) */}
+      <section className="py-12 px-4 max-w-7xl mx-auto">
+        <ReferralSection />
+      </section>
+
+      {/* 9. Final CTA */}
       <section className="py-20 px-4 bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600">
         <div className="max-w-4xl mx-auto text-center">
           <h2 className="text-4xl md:text-5xl font-bold text-white mb-6">
@@ -576,7 +583,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* 9. Footer */}
+      {/* 10. Footer */}
       <footer className="bg-gray-900 text-gray-300 py-12 px-4">
         <div className="max-w-7xl mx-auto">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 mb-8">
@@ -649,7 +656,7 @@ export default function LandingPage() {
           </div>
 
           <div className="border-t border-gray-800 pt-8 text-center text-gray-400">
-            <p>© 2025 WordSage. All rights reserved. CoFounder Makhija Quantum AI in India.</p>
+            <p>© 2025 WordSage. All rights reserved. CoFounder Shitesh K Khaw in India.</p>
           </div>
         </div>
       </footer>

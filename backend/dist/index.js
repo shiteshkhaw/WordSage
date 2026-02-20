@@ -74,11 +74,16 @@ import { corsOptions, handleCorsError } from "./config/cors.js";
 app.use(cors(corsOptions));
 // Explicitly handle preflight for all routes to ensure proper OPTIONS handling
 app.options("*", cors(corsOptions));
+import cookieParser from "cookie-parser";
 /* ---------------------------------------------
    RAZORPAY WEBHOOK (RAW BODY)
 ---------------------------------------------- */
 // MUST be above any express.json() usage
 app.use("/api/razorpay/webhook", express.raw({ type: "application/json" }));
+/* ---------------------------------------------
+   COOKIE PARSER
+---------------------------------------------- */
+app.use(cookieParser());
 /* ---------------------------------------------
    BODY PARSERS
 ---------------------------------------------- */

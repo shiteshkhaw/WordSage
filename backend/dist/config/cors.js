@@ -18,11 +18,8 @@ const getAllowedOrigins = () => {
         const extra = process.env.CORS_ALLOWED_ORIGINS.split(",").map((o) => o.trim());
         origins.push(...extra);
     }
-    // 3. Localhost (Development only)
-    if (!isProduction) {
-        origins.push("http://localhost:3000");
-        origins.push("http://127.0.0.1:3000");
-    }
+    // 3. Development mode - still uses FRONTEND_URL from .env
+    // No hardcoded localhost
     // Remove duplicates and empty strings
     return [...new Set(origins)].filter(Boolean);
 };

@@ -14,7 +14,7 @@ function getOpenAIClient() {
             apiKey,
             baseURL: 'https://openrouter.ai/api/v1',
             defaultHeaders: {
-                'HTTP-Referer': process.env.FRONTEND_URL || 'http://localhost:3000',
+                'HTTP-Referer': process.env.FRONTEND_URL,
                 'X-Title': 'WordSage',
             },
         });

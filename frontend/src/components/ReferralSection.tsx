@@ -28,7 +28,13 @@ export default function ReferralSection() {
     }
   };
 
-  const referralUrl = `${window.location.origin}/signup?ref=${referralCode}`;
+  const [referralUrl, setReferralUrl] = useState("");
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setReferralUrl(`${window.location.origin}/signup?ref=${referralCode}`);
+    }
+  }, [referralCode]);
 
   const copyToClipboard = () => {
     navigator.clipboard.writeText(referralUrl);
