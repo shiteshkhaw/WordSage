@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { validateEnv } from "./lib/validate-env";
+import { validateEnv } from "./lib/validate-env.js";
 
 // Validate environment before starting
 validateEnv();
