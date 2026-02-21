@@ -19,14 +19,16 @@ const getAllowedOrigins = (): string[] => {
         origins.push(process.env.FRONTEND_URL);
     }
 
-    // 2. Additional configured origins (Comma separated)
+    // 2. CORS_ORIGIN (explicit override, e.g. set on Render/Railway)
+    if (process.env.CORS_ORIGIN) {
+        origins.push(process.env.CORS_ORIGIN);
+    }
+
+    // 3. Additional configured origins (Comma separated)
     if (process.env.CORS_ALLOWED_ORIGINS) {
         const extra = process.env.CORS_ALLOWED_ORIGINS.split(",").map((o) => o.trim());
         origins.push(...extra);
     }
-
-    // 3. Development mode - still uses FRONTEND_URL from .env
-    // No hardcoded localhost
 
     // Remove duplicates and empty strings
     return [...new Set(origins)].filter(Boolean);
