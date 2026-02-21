@@ -30,9 +30,10 @@ const getAllowedOrigins = (): string[] => {
         origins.push(...extra);
     }
 
-    // Remove duplicates and empty strings
-    return [...new Set(origins)].filter(Boolean);
+    // Normalize: strip trailing slashes (browsers never send origin with trailing /)
+    return [...new Set(origins)].filter(Boolean).map((o) => o.replace(/\/+$/, ""));
 };
+
 
 export const corsOptions: CorsOptions = {
     // Dynamic Origin Validation
