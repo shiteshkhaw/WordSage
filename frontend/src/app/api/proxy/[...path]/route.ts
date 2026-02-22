@@ -20,8 +20,8 @@ if (!BACKEND_URL) {
     console.error('❌ BACKEND_URL is not set. Proxy route will fail.');
 }
 
-// Headers that must not be forwarded upstream
-const HOP_BY_HOP_HEADERS = new Set([
+// Headers that must not be forwarded to the backend (request side)
+const HOP_BY_HOP_REQUEST_HEADERS = new Set([
     'connection',
     'keep-alive',
     'transfer-encoding',
@@ -31,6 +31,24 @@ const HOP_BY_HOP_HEADERS = new Set([
     'proxy-authorization',
     'proxy-authenticate',
     'host',
+]);
+
+// Headers that must not be forwarded back to the browser (response side).
+// IMPORTANT: Node's fetch auto-decompresses gzip/br/deflate responses from the
+// backend. If we forward Content-Encoding: gzip the browser tries to
+// decompress an already-decompressed body → ERR_CONTENT_DECODING_FAILED + 500.
+// Stripping both content-encoding and content-length fixes this.
+const HOP_BY_HOP_RESPONSE_HEADERS = new Set([
+    'connection',
+    'keep-alive',
+    'transfer-encoding',
+    'te',
+    'trailer',
+    'upgrade',
+    'proxy-authorization',
+    'proxy-authenticate',
+    'content-encoding',  // ← body is already decoded by Node fetch
+    'content-length',    // ← length no longer matches decoded body
 ]);
 
 async function proxyRequest(req: NextRequest, pathSegments: string[]): Promise<NextResponse> {
@@ -66,10 +84,15 @@ async function proxyRequest(req: NextRequest, pathSegments: string[]): Promise<N
     // 3. Build forwarded headers (strip hop-by-hop, inject Authorization)
     const forwardedHeaders = new Headers();
     req.headers.forEach((value, key) => {
-        if (!HOP_BY_HOP_HEADERS.has(key.toLowerCase())) {
+        if (!HOP_BY_HOP_REQUEST_HEADERS.has(key.toLowerCase())) {
             forwardedHeaders.set(key, value);
         }
     });
+
+    // Tell the backend NOT to compress the response.
+    // Node's fetch auto-decompresses gzip but we can't re-set Content-Encoding,
+    // so uncompressed responses are the safest option.
+    forwardedHeaders.set('accept-encoding', 'identity');
 
     // Set the correct host for the backend
     forwardedHeaders.set('host', new URL(BACKEND_URL).host);
@@ -124,9 +147,11 @@ async function proxyRequest(req: NextRequest, pathSegments: string[]): Promise<N
     }
 
     // 6. Stream the backend response back to the browser
+    // Use HOP_BY_HOP_RESPONSE_HEADERS to strip content-encoding/content-length
+    // since Node's fetch already decoded the body.
     const responseHeaders = new Headers();
     backendResponse.headers.forEach((value, key) => {
-        if (!HOP_BY_HOP_HEADERS.has(key.toLowerCase())) {
+        if (!HOP_BY_HOP_RESPONSE_HEADERS.has(key.toLowerCase())) {
             responseHeaders.set(key, value);
         }
     });
