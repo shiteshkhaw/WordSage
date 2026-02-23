@@ -38,17 +38,25 @@ const SKIP_RESPONSE_HEADERS = new Set([
     'content-length',     // length no longer accurate after decode
 ]);
 
-/** Find the raw NextAuth session cookie from the request */
-function getSessionCookie(req: NextRequest): string | undefined {
+/** Find the raw NextAuth session cookie from the request.
+ *  Returns both the token value and the cookie name (which is the JWE salt).
+ */
+function getSessionCookie(req: NextRequest): { value: string; cookieName: string } | undefined {
     // Next-auth v5 on HTTPS uses __Secure-authjs.session-token
     // On HTTP (dev) it uses authjs.session-token
     // Also check legacy next-auth v4 cookie names for safety
-    return (
-        req.cookies.get('__Secure-authjs.session-token')?.value ??
-        req.cookies.get('authjs.session-token')?.value ??
-        req.cookies.get('__Secure-next-auth.session-token')?.value ??
-        req.cookies.get('next-auth.session-token')?.value
-    );
+    const cookies = [
+        '__Secure-authjs.session-token',
+        'authjs.session-token',
+        '__Secure-next-auth.session-token',
+        'next-auth.session-token',
+    ] as const;
+
+    for (const cookieName of cookies) {
+        const value = req.cookies.get(cookieName)?.value;
+        if (value) return { value, cookieName };
+    }
+    return undefined;
 }
 
 async function proxyRequest(
@@ -90,9 +98,12 @@ async function proxyRequest(
 
         // 3. Inject Authorization from session cookie
         // We read the raw JWE token directly — no getToken() needed.
+        // We also forward the cookie name as X-Auth-Salt so the backend can
+        // decode with the correct salt (cookie name == JWE salt in next-auth v5).
         const sessionCookie = getSessionCookie(req);
         if (sessionCookie) {
-            forwardedHeaders.set('Authorization', `Bearer ${sessionCookie}`);
+            forwardedHeaders.set('Authorization', `Bearer ${sessionCookie.value}`);
+            forwardedHeaders.set('X-Auth-Salt', sessionCookie.cookieName);
         }
 
         // Remove browser cookies from upstream request (we use Bearer instead)
