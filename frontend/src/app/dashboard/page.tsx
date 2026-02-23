@@ -232,7 +232,7 @@ export default function DashboardHome() {
   }
 
   return (
-    <div className="space-y-12 max-w-7xl mx-auto relative p-6">
+    <div className="space-y-8 sm:space-y-12 max-w-7xl mx-auto relative p-3 sm:p-6 pb-20">
 
       {/* 1. Pending Invites Section */}
       {pendingInvites.length > 0 && (
@@ -286,25 +286,25 @@ export default function DashboardHome() {
       )}
 
       {/* 2. Welcome Header */}
-      <div className="space-y-6">
-        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-50 via-purple-50 to-blue-50 p-12 border border-indigo-200">
-          <div className="absolute top-0 right-0 w-96 h-96 bg-gradient-to-br from-indigo-100 to-transparent rounded-full blur-3xl opacity-40 -translate-y-1/2 translate-x-1/2"></div>
+      <div className="space-y-4 sm:space-y-6">
+        <div className="relative overflow-hidden rounded-2xl sm:rounded-3xl bg-gradient-to-br from-indigo-50 via-purple-50 to-blue-50 p-6 sm:p-12 border border-indigo-200">
+          <div className="absolute top-0 right-0 w-60 sm:w-96 h-60 sm:h-96 bg-gradient-to-br from-indigo-100 to-transparent rounded-full blur-3xl opacity-40 -translate-y-1/2 translate-x-1/2"></div>
           <div className="relative z-10">
-            <h1 className="text-5xl md:text-6xl font-bold text-slate-900 mb-3 leading-tight">
+            <h1 className="text-3xl sm:text-5xl md:text-6xl font-bold text-slate-900 mb-2 sm:mb-3 leading-tight break-words">
               {greeting()}, <span className="bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">{user?.email?.split("@")[0]}</span> 👋
             </h1>
-            <div className="flex items-center space-x-4 mb-6">
-              <p className="text-lg text-slate-700 font-light">
+            <div className="flex flex-wrap items-center gap-3 mb-4 sm:mb-6">
+              <p className="text-sm sm:text-lg text-slate-700 font-light">
                 Continue refining your craft with AI-powered insights
               </p>
               {profile?.login_streak && profile.login_streak > 0 && (
-                <div className="inline-flex items-center space-x-2 bg-orange-100 px-4 py-2 rounded-full border border-orange-200">
-                  <span className="text-2xl animate-pulse">🔥</span>
-                  <span className="text-sm font-bold text-orange-700">{profile.login_streak} day streak!</span>
+                <div className="inline-flex items-center space-x-2 bg-orange-100 px-3 py-1.5 sm:px-4 sm:py-2 rounded-full border border-orange-200">
+                  <span className="text-lg sm:text-2xl animate-pulse">🔥</span>
+                  <span className="text-xs sm:text-sm font-bold text-orange-700">{profile.login_streak} day streak!</span>
                 </div>
               )}
             </div>
-            <p className="text-sm text-slate-600">
+            <p className="text-xs sm:text-sm text-slate-600">
               🕘 {dateTime} • <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full animate-pulse">🟢 Auto-refresh</span>
             </p>
           </div>
@@ -335,7 +335,7 @@ export default function DashboardHome() {
       </div>
 
       {/* 3. Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
         {[
           {
             label: "AI Requests Made",
@@ -361,7 +361,7 @@ export default function DashboardHome() {
         ].map((stat, idx) => (
           <div
             key={idx}
-            className={`bg-gradient-to-br ${stat.gradient} rounded-2xl p-8 text-white shadow-lg hover:shadow-2xl transition-all transform hover:-translate-y-2 border border-white/10 ${animateStats ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"
+            className={`bg-gradient-to-br ${stat.gradient} rounded-2xl p-5 md:p-8 text-white shadow-lg hover:shadow-2xl transition-all transform hover:-translate-y-2 border border-white/10 ${animateStats ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"
               }`}
             style={{
               transition: `all 0.6s ease-out ${idx * 100}ms`,
@@ -387,19 +387,19 @@ export default function DashboardHome() {
       </div>
 
       {/* 4. Referral Section */}
-      <div className="bg-gradient-to-br from-purple-50 via-pink-50 to-purple-50 rounded-3xl p-8 border-2 border-purple-200 shadow-lg">
-        <div className="flex items-center justify-between mb-6 flex-wrap gap-4">
+      <div className="bg-gradient-to-br from-purple-50 via-pink-50 to-purple-50 rounded-2xl sm:rounded-3xl p-5 sm:p-8 border-2 border-purple-200 shadow-lg overflow-hidden">
+        <div className="flex items-center justify-between mb-5 sm:mb-6 flex-wrap gap-4">
           <div>
-            <h2 className="text-3xl font-bold text-purple-900 mb-2">🎁 Refer & Earn Coins</h2>
-            <p className="text-purple-700">Invite friends and both of you get bonus coins!</p>
+            <h2 className="text-2xl sm:text-3xl font-bold text-purple-900 mb-1 sm:mb-2">🎁 Refer & Earn Coins</h2>
+            <p className="text-sm sm:text-base text-purple-700">Invite friends and both of you get bonus coins!</p>
           </div>
-          <div className="text-center bg-white rounded-2xl p-6 shadow-md min-w-[150px]">
-            <p className="text-sm text-purple-600 font-semibold mb-1">Your Referrals</p>
-            <p className="text-5xl font-bold text-purple-900">{profile?.total_referrals || 0}</p>
+          <div className="text-center bg-white rounded-2xl p-4 sm:p-6 shadow-md min-w-[120px]">
+            <p className="text-xs sm:text-sm text-purple-600 font-semibold mb-1">Your Referrals</p>
+            <p className="text-4xl sm:text-5xl font-bold text-purple-900">{profile?.total_referrals || 0}</p>
           </div>
         </div>
 
-        <div className="grid md:grid-cols-2 gap-6 mb-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-5 sm:mb-6">
           <div className="bg-white rounded-2xl p-6 shadow-md">
             <label className="text-sm font-bold text-purple-900 mb-3 block flex items-center">
               <span className="text-2xl mr-2">🎟️</span>
@@ -410,7 +410,7 @@ export default function DashboardHome() {
                 type="text"
                 value={profile?.referral_code || "Loading..."}
                 readOnly
-                className="flex-1 px-4 py-3 border-2 border-purple-300 rounded-lg bg-purple-50 text-purple-900 font-mono font-bold text-2xl text-center"
+                className="flex-1 min-w-0 px-3 sm:px-4 py-2 sm:py-3 border-2 border-purple-300 rounded-lg bg-purple-50 text-purple-900 font-mono font-bold text-lg sm:text-2xl text-center"
               />
               <button
                 onClick={copyReferralLink}
@@ -431,7 +431,7 @@ export default function DashboardHome() {
                 type="text"
                 value={`${typeof window !== 'undefined' ? window.location.origin : ''}/signup?ref=${profile?.referral_code || ''}`}
                 readOnly
-                className="flex-1 px-4 py-3 border-2 border-purple-300 rounded-lg bg-purple-50 text-purple-700 text-sm truncate"
+                className="flex-1 min-w-0 px-3 sm:px-4 py-2 sm:py-3 border-2 border-purple-300 rounded-lg bg-purple-50 text-purple-700 text-xs sm:text-sm truncate"
               />
               <button
                 onClick={copyReferralLink}
@@ -460,11 +460,12 @@ export default function DashboardHome() {
       </div>
 
       {/* 5. Recent Activity */}
-      <div className="space-y-6">
-        <h2 className="text-3xl font-bold text-slate-900">💰 Recent Coin Activity</h2>
+      <div className="space-y-4 sm:space-y-6">
+        <h2 className="text-2xl sm:text-3xl font-bold text-slate-900">💰 Recent Coin Activity</h2>
         <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-lg">
           <div className="overflow-x-auto">
-            <table className="w-full">
+            {/* min-w ensures table scrolls on narrow screens instead of squishing */}
+            <table className="w-full min-w-[520px]">
               <thead className="bg-gradient-to-r from-slate-50 to-slate-100">
                 <tr>
                   <th className="px-6 py-4 text-left text-sm font-bold text-slate-700">Activity</th>
@@ -515,9 +516,9 @@ export default function DashboardHome() {
       </div>
 
       {/* 6. Quick Actions */}
-      <div className="space-y-6">
-        <h2 className="text-3xl font-bold text-slate-900">Quick Actions</h2>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="space-y-4 sm:space-y-6">
+        <h2 className="text-2xl sm:text-3xl font-bold text-slate-900">Quick Actions</h2>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
           {[
             { icon: "M12 4v16m8-8H4", title: "New Document", href: "/editor", desc: "Start fresh" },
             { icon: "M9 12l2 2 4-4", title: "Improve Writing", href: "/editor", desc: "Enhance clarity" },
@@ -551,11 +552,11 @@ export default function DashboardHome() {
       </div>
 
       {/* 7. Teams CTA */}
-      <div className="bg-gradient-to-br from-purple-50 via-pink-50 to-purple-50 rounded-3xl p-12 border-2 border-purple-200 shadow-lg">
-        <div className="flex items-center justify-between mb-6 flex-wrap gap-6">
+      <div className="bg-gradient-to-br from-purple-50 via-pink-50 to-purple-50 rounded-2xl sm:rounded-3xl p-6 sm:p-12 border-2 border-purple-200 shadow-lg">
+        <div className="flex items-center justify-between mb-5 sm:mb-6 flex-wrap gap-4 sm:gap-6">
           <div>
-            <h2 className="text-3xl font-bold text-purple-900 mb-2">👥 Team Collaboration</h2>
-            <p className="text-purple-700">Work with your team using shared style guides</p>
+            <h2 className="text-2xl sm:text-3xl font-bold text-purple-900 mb-1 sm:mb-2">👥 Team Collaboration</h2>
+            <p className="text-sm sm:text-base text-purple-700">Work with your team using shared style guides</p>
           </div>
           <Link
             href="/dashboard/teams"
@@ -567,9 +568,9 @@ export default function DashboardHome() {
       </div>
 
       {/* 8. Recent Documents */}
-      <div className="space-y-6">
+      <div className="space-y-4 sm:space-y-6">
         <div className="flex justify-between items-center">
-          <h2 className="text-3xl font-bold text-slate-900">Recent Work</h2>
+          <h2 className="text-2xl sm:text-3xl font-bold text-slate-900">Recent Work</h2>
         </div>
 
         {documents.length > 0 ? (
