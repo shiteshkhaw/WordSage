@@ -61,9 +61,17 @@ export async function requireAuth(req, res, next) {
         }
         // Check for Authorization header
         let token = req.headers.authorization;
-        let salt = 'authjs.session-token'; // Default salt for v5
-        // If no auth header, try cookies
-        if (!token && req.cookies) {
+        let salt;
+        if (token) {
+            // Strip "Bearer " prefix
+            token = token.startsWith('Bearer ') ? token.substring(7) : token;
+            // The proxy sends X-Auth-Salt = the cookie name it read the token from.
+            // The cookie name IS the JWE salt in next-auth v5.
+            // If the header is absent (e.g. direct calls), default to the most common salt.
+            salt = req.headers['x-auth-salt'] || 'authjs.session-token';
+        }
+        else if (req.cookies) {
+            // Fallback: read session token directly from cookies (non-proxy path)
             // Check priority: Secure authjs > authjs > Secure next-auth > next-auth
             if (req.cookies['__Secure-authjs.session-token']) {
                 token = req.cookies['__Secure-authjs.session-token'];
@@ -81,10 +89,12 @@ export async function requireAuth(req, res, next) {
                 token = req.cookies['next-auth.session-token'];
                 salt = 'next-auth.session-token';
             }
+            else {
+                salt = 'authjs.session-token'; // no cookie found; will 401 below
+            }
         }
-        else if (token) {
-            // Handle Bearer token
-            token = token.startsWith('Bearer ') ? token.substring(7) : token;
+        else {
+            salt = 'authjs.session-token';
         }
         if (!token || token.trim() === '') {
             return res.status(401).json({

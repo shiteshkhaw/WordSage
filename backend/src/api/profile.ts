@@ -52,7 +52,7 @@ profileRouter.get('/', requireAuth, async (req: AuthenticatedRequest, res: Respo
                 coins_balance: userProfile.user_profiles?.coins_balance || 0,
                 total_ai_requests: userProfile.user_profiles?.total_ai_requests || 0,
                 words_processed: userProfile.user_profiles?.words_processed || 0,
-                daily_streak: userProfile.user_profiles?.daily_streak || 0,
+                login_streak: userProfile.user_profiles?.daily_streak || 0,
                 // Referral fields from user_profiles
                 referral_code: referralCode || '',
                 total_referrals: (userProfile.user_profiles as any)?.total_referrals || 0,
