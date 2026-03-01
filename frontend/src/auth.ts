@@ -4,9 +4,9 @@ import GitHub from "next-auth/providers/github"
 import Credentials from "next-auth/providers/credentials"
 
 // Validate required environment variables at module load
-const NEXTAUTH_SECRET = process.env.NEXTAUTH_SECRET;
+const NEXTAUTH_SECRET = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET;
 if (!NEXTAUTH_SECRET) {
-    console.error("❌ NEXTAUTH_SECRET is not set. Authentication will fail.");
+    console.error("❌ AUTH_SECRET / NEXTAUTH_SECRET is not set. Authentication will fail.");
 }
 
 // For server-side auth calls, use BACKEND_URL (Docker runtime)
@@ -17,6 +17,7 @@ if (!API_URL) {
 }
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
+    basePath: "/api/auth",
     providers: [
         Google({
             clientId: process.env.GOOGLE_CLIENT_ID!,

@@ -305,11 +305,11 @@ export default function EditorPage() {
     if (!user) return;
 
     try {
-      const teamsRes = await apiFetch<{ data: { id: string; name: string }[] }>('/api/teams');
-      if (teamsRes?.data) {
-        setUserTeams(teamsRes.data);
-        if (teamsRes.data.length > 0 && !selectedTeam) {
-          setSelectedTeam(teamsRes.data[0].id);
+      const response = await apiFetch<{ teams: { id: string; name: string }[] }>('/api/teams');
+      if (response?.teams) {
+        setUserTeams(response.teams);
+        if (response.teams.length > 0 && !selectedTeam) {
+          setSelectedTeam(response.teams[0].id);
         }
       }
     } catch (error) {

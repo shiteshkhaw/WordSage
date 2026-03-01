@@ -449,9 +449,8 @@ export default function PremiumTeamEditor() {
         improve: 'improve',
       };
 
-      const response = await fetch("/api/ai/process", {
+      const data = await apiFetch<any>("/api/ai/team-process", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           text,
           action: actionMap[command] || 'improve',
@@ -460,9 +459,6 @@ export default function PremiumTeamEditor() {
           mode: command === 'formal' ? 'academic' : command === 'casual' ? 'casual' : 'professional',
         }),
       });
-
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "AI failed");
 
       if (data.result) {
         if (isFullSelection) {

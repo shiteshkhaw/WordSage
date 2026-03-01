@@ -89,12 +89,12 @@ export default function DashboardHome() {
       if (profileRes?.data) setProfile(profileRes.data);
 
       // 2. Recent Documents
-      const docsRes = await apiFetch<{ documents: Document[] }>('/api/documents');
-      if (docsRes?.documents) setDocuments(docsRes.documents.slice(0, 5));
+      const docsRes = await apiFetch<{ data: Document[] }>('/api/documents');
+      if (docsRes?.data) setDocuments(docsRes.data.slice(0, 5));
 
       // 3. Transactions
-      const transRes = await apiFetch<{ transactions: CoinTransaction[] }>('/api/transactions');
-      if (transRes?.transactions) setRecentTransactions(transRes.transactions.slice(0, 10));
+      const transRes = await apiFetch<{ data: CoinTransaction[] }>('/api/transactions');
+      if (transRes?.data) setRecentTransactions(transRes.data.slice(0, 10));
 
       // 4. Pending Invites
       const invitesRes = await apiFetch<{ data: TeamInvitation[] }>('/api/teams/invites');
@@ -178,7 +178,7 @@ export default function DashboardHome() {
   };
 
   const getTransactionIcon = (action: string) => {
-    const a = action.toLowerCase();
+    const a = (action || '').toLowerCase();
     if (a.includes('bonus') || a.includes('referral')) return '🎁';
     if (a.includes('purchase')) return '💳';
     if (a.includes('grammar')) return '✅';
@@ -482,7 +482,7 @@ export default function DashboardHome() {
                           <span className="text-2xl">{getTransactionIcon(trans.action)}</span>
                           <div>
                             <p className="font-semibold text-slate-900">
-                              {trans.action.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}
+                              {(trans.action || 'Unknown').replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}
                             </p>
                             {trans.details && (
                               <p className="text-xs text-slate-500">

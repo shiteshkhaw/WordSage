@@ -66,7 +66,7 @@ export const corsOptions: CorsOptions = {
 
     // Security Headers
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "X-Auth-Salt"],
     exposedHeaders: ["X-RateLimit-Limit", "X-RateLimit-Remaining"],
     credentials: true,
     maxAge: 86400, // 24 hours preflight cache
