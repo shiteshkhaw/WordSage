@@ -254,7 +254,7 @@ export default function EditorPage() {
     prompt += `**Brand Voice:** ${styleGuide.brand_voice}\n`;
     prompt += `**Tone:** ${styleGuide.tone}\n\n`;
 
-    if (styleGuide.approved_terms.length > 0) {
+    if (styleGuide.approved_terms && styleGuide.approved_terms.length > 0) {
       prompt += `**Preferred terms (use these):**\n`;
       styleGuide.approved_terms.forEach((term) => {
         prompt += `- ${term}\n`;
@@ -262,7 +262,7 @@ export default function EditorPage() {
       prompt += `\n`;
     }
 
-    if (styleGuide.forbidden_terms.length > 0) {
+    if (styleGuide.forbidden_terms && styleGuide.forbidden_terms.length > 0) {
       prompt += `**AVOID these terms:**\n`;
       styleGuide.forbidden_terms.forEach((term) => {
         prompt += `- ${term}\n`;
@@ -727,7 +727,7 @@ export default function EditorPage() {
                   <span className="text-slate-600">Tone:</span>
                   <span className="ml-2 font-semibold text-indigo-800 capitalize">{styleGuide.tone}</span>
                 </div>
-                {styleGuide.approved_terms.length > 0 && (
+                {styleGuide.approved_terms && styleGuide.approved_terms.length > 0 && (
                   <div className="col-span-2">
                     <span className="text-slate-600">Approved:</span>
                     <div className="flex flex-wrap gap-1 mt-1">
@@ -744,7 +744,7 @@ export default function EditorPage() {
                     </div>
                   </div>
                 )}
-                {styleGuide.forbidden_terms.length > 0 && (
+                {styleGuide.forbidden_terms && styleGuide.forbidden_terms.length > 0 && (
                   <div className="col-span-2">
                     <span className="text-slate-600">Forbidden:</span>
                     <div className="flex flex-wrap gap-1 mt-1">
