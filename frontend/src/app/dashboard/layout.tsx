@@ -375,9 +375,8 @@ export default function DashboardLayout({
           fixed h-screen left-0 top-0 z-50 flex flex-col shadow-lg
           bg-white border-r border-slate-200
           transition-all duration-300 ease-in-out
-          /* Mobile: drawer — always w-72, hidden via transform */
           w-72
-          ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}
+          ${sidebarOpen ? "translate-x-0" : "max-lg:-translate-x-full"}
           /* Desktop: always visible, width depends on sidebarOpen */
           lg:translate-x-0
           ${sidebarOpen ? "lg:w-72" : "lg:w-24"}
@@ -414,8 +413,8 @@ export default function DashboardLayout({
                   onClick={closeMobileSidebar}
                   aria-label={item.name}
                   className={`flex items-center space-x-3 px-4 py-3 rounded-xl transition-all duration-200 relative focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${isActive
-                      ? "bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-lg"
-                      : "text-slate-600 hover:bg-slate-100"
+                    ? "bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-lg"
+                    : "text-slate-600 hover:bg-slate-100"
                     }`}
                 >
                   {isActive && (
@@ -474,8 +473,8 @@ export default function DashboardLayout({
           flex-1 flex flex-col min-h-screen
           ml-0
           transition-all duration-300
-          lg:ml-72
-          ${sidebarOpen ? "" : "lg:!ml-24"}
+          max-lg:ml-0
+          ${sidebarOpen ? "lg:ml-72" : "lg:ml-24"}
         `}
       >
 
@@ -586,7 +585,7 @@ export default function DashboardLayout({
                           >
                             <div className="flex items-start gap-3">
                               <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${notif.type === "welcome" ? "bg-green-100" :
-                                  notif.type === "daily_bonus" ? "bg-orange-100" : "bg-blue-100"
+                                notif.type === "daily_bonus" ? "bg-orange-100" : "bg-blue-100"
                                 }`}>
                                 <span className="text-lg">
                                   {notif.type === "welcome" ? "🎉" : notif.type === "daily_bonus" ? "✨" : "💰"}
