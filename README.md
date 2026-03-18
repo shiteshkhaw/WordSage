@@ -228,5 +228,5 @@ npm run dev              # Next.js dev on port 3000
 
 <p align="center">
   Architected and shipped to production by <strong>Shitesh</strong>. <br/>
-  <a href="https://word-sage-tan.vercel.app">word-sage-tan.vercel.app</a>
+  <a href="https://wordsage.vercel.app/">wordsage.vercel.app</a>
 </p>
