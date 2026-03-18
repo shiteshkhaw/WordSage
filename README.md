@@ -19,41 +19,30 @@
 
 ---
 
-## 📌 What is WordSage?
+## 🎯 WordSage: The Usecase Perspective (User POV)
 
-WordSage is a **production-deployed, full-stack AI writing SaaS** built from the ground up — featuring an LLM-powered writing engine, a multi-tenant team collaboration workspace with RBAC, a virtual currency economy (SkillsCoins), Razorpay payment integration, 30+ document templates, and a complete analytics dashboard.
+**WordSage** is a comprehensive AI-powered writing companion designed to bridge the gap between human creativity and artificial intelligence. 
 
-The entire system is built with strict TypeScript across frontend and backend, is fully containerised with Docker + Nginx, and is deployed on Vercel (frontend) + Render (backend) with zero cross-origin cookie exposure.
+### Core Value Propositions
+- **For Solo Writers & Content Creators:** Overcome writer's block with 30+ structured document templates (from SEO blogs to Twitter threads). Instantly rewrite, expand, summarize, or humanize text using the intelligent AI editor. Keep track of writing streaks and earn virtual *SkillsCoins*.
+- **For Marketing Agencies & Teams:** A multi-tenant workspace where team owners can enforce **Brand Voice and Tone** through Team Style Guides. Every AI generation is automatically validated against approved/forbidden terms. Access a shared Content Library of approved snippets. 
+- **For Academics & Professionals:** Built-in Grammar fixing, plagiarism detection, and academic citation generation.
+- **For Businesses:** Predictable pricing through the **SkillsCoins economy** or monthly Razorpay subscriptions (Pro & Teams tiers). 
 
-> **One-liner for résumé:**
-> *Architected and shipped WordSage — a production-grade AI writing SaaS on Next.js 14 + Express + PostgreSQL, featuring a multi-tenant RBAC team workspace, an LLM pipeline with 11 AI actions, a Razorpay billing system with HMAC-SHA256 webhook verification, and a virtual currency economy with full transaction audit logging.*
-
----
-
-## 🔗 Quick Links
-
-| Resource | URL |
-|---|---|
-| 🌐 Live App | [word-sage-tan.vercel.app](https://word-sage-tan.vercel.app) |
-| ⚙️ Backend API | [wordsage-krvw.onrender.com/api/health](https://wordsage-krvw.onrender.com/api/health) |
-| 💻 GitHub | [github.com/shiteshkhaw/WordSage](https://github.com/shiteshkhaw/WordSage) |
+*Users simply log in (via Google, GitHub, or secure email/password), select a template or open a blank document, highlight text, and command the AI—all while collaborating with peers in real-time.*
 
 ---
 
-## ⚙️ Tech Stack
+## 💻 WordSage: The Coder's & Recruiter's Perspective (Engineering POV)
 
-| Layer | Technologies |
-|---|---|
-| **Frontend** | Next.js 14 (App Router), React 18, TypeScript, Tailwind CSS |
-| **Auth** | NextAuth v5 — Credentials + Google OAuth + GitHub OAuth, JWE session tokens |
-| **Backend** | Node.js, Express.js, TypeScript (ESM), Zod validation |
-| **Database** | PostgreSQL · Prisma ORM 5.22 · 20 normalized models |
-| **AI Engine** | OpenRouter API (LLM gateway) · 6 standard + 5 advanced AI actions |
-| **Payments** | Razorpay · one-time coin packs · monthly subscriptions · HMAC-SHA256 webhook |
-| **Email** | Resend (transactional invite emails) |
-| **Security** | Helmet.js · express-rate-limit · bcryptjs · CORS hardening |
-| **DevOps** | Docker · docker-compose · Nginx reverse proxy · SIGTERM graceful shutdown |
-| **Deployment** | Vercel (frontend SSR/SSG) + Render (backend API, auto-sleep disabled) |
+From an engineering standpoint, WordSage is designed as a **highly scalable, production-ready distributed system**. It goes beyond the typical CRUD app by implementing advanced architectural patterns, strict security mechanisms, and a highly resilient, detached backend engine.
+
+### 🌟 Why is this a Successful Engineering Project?
+1. **Decoupled Architecture:** Instead of building a monolithic Next.js app, WordSage splits the React frontend (Next.js) from the REST API backend (Express). This allows independent vertical scaling, better separation of concerns, and paves the way for future mobile apps consuming the exact same backend.
+2. **Zero Cross-Origin Cookie Leakage:** Handled the complex authentication bridging issue between Vercel and Render. The Next.js server acts as an opaque proxy, converting browser JWE cookies into secure `Authorization: Bearer <JWE>` headers for the backend.
+3. **Financial-Grade Integrity:** Razorpay webhooks are secured using HMAC-SHA256 signature validation. The virtual economy (`SkillsCoins`) relies on strict ACID-compliant database transactions via Prisma to prevent double-spending, negative balances, or race conditions.
+4. **Resilient Security Framework:** Implements a comprehensive defense-in-depth strategy: Helmet.js for HTTP headers, `express-rate-limit` (behind proxy trusts) to thwart brute force attacks, disposable email blocklists (400+ domains barred), and cryptographically secure randomly generated `crypto.randomBytes(64)` tokens for flows like password reset.
+5. **Fully Containerized Environment:** The entire stack is orchestratable via `docker-compose` with an Nginx reverse proxy routing front/back traffic seamlessly under one origin.
 
 ---
 
@@ -62,7 +51,7 @@ The entire system is built with strict TypeScript across frontend and backend, i
 ```mermaid
 graph TB
     subgraph "Client (Browser)"
-        UI[Next.js 14 App Router<br/>React 18 + TypeScript]
+        UI[Next.js 14 App Router<br/>React 18 + Tiptap Editor]
     end
 
     subgraph "Vercel — Frontend"
@@ -75,24 +64,19 @@ graph TB
         direction TB
         PROXY -->|"Authorization: Bearer <JWE>"| EXPRESS[Express.js REST API\nPort 4000]
         EXPRESS --> MIDDLEWARE[Auth Middleware\nJWE Decode + Salt-Aware]
-        MIDDLEWARE --> ROUTES[14 API Route Modules]
+        MIDDLEWARE --> ROUTES[15 API Route Modules]
     end
 
     subgraph "PostgreSQL Database"
         direction TB
-        ROUTES --> PRISMA[Prisma ORM\nType-Safe Client]
-        PRISMA --> DB[(PostgreSQL\n20 Tables)]
+        ROUTES --> PRISMA[Prisma ORM 5.22\nType-Safe Client]
+        PRISMA --> DB[(PostgreSQL\n21 Normalized Tables)]
     end
 
-    subgraph "External Services"
-        ROUTES --> OPENROUTER[OpenRouter\nLLM Gateway]
-        ROUTES --> RAZORPAY[Razorpay\nPayments + Webhooks]
+    subgraph "External Integration Layer"
+        ROUTES --> OPENROUTER[OpenRouter\nLLM Pipeline]
+        ROUTES --> RAZORPAY[Razorpay\nPayments + HMAC Hooks]
         ROUTES --> RESEND[Resend\nTransactional Email]
-    end
-
-    subgraph "Local Docker Setup"
-        NGINX[Nginx\nReverse Proxy :80] --> FE_DOCKER[Frontend :3000]
-        NGINX --> BE_DOCKER[Backend :4000]
     end
 
     style UI fill:#6366f1,color:#fff
@@ -104,388 +88,94 @@ graph TB
 
 ---
 
-## 🔐 Authentication & Cross-Domain Architecture
+## 🔬 Deep Dive: Minute Codebase Details & Tech Rationale
 
-One of the most technically challenging problems solved in WordSage is **zero cross-origin cookie exposure** between Vercel (frontend) and Render (backend):
+Every technology choice in WordSage was scrutinized with a specific technical rationale.
 
-```mermaid
-sequenceDiagram
-    participant B as Browser
-    participant N as Next.js Server<br/>(Vercel)
-    participant P as /api/proxy/[...path]
-    participant A as Express API<br/>(Render)
-    participant DB as PostgreSQL
+### 1. The Frontend: Next.js 14 App Router + Tiptap
+- **Why Next.js?** Server-Side Rendering (SSR) ensures blazing fast initial loads, excellent SEO for public templates, and seamless API route handling for the backend proxy gateway.
+- **Why Tiptap over Slate/Quill?** Standard `contenteditable` divs are unpredictable. Tiptap provides a headless, prose-mirror-backed editor allowing custom React node views, real-time collaboration extensions, and seamless AI text streaming injection without tearing the DOM.
+- **Why Tailwind + Framer Motion?** Tailwind ensures zero-runtime CSS with high cacheability. Framer Motion provides the premium, fluid micro-interactions expected of modern top-tier SaaS products.
 
-    B->>N: User clicks action
-    N->>N: Read __Secure-authjs.session-token cookie
-    N->>P: Internal server call with cookie
-    P->>P: Extract JWE token + compute salt<br/>from cookie name
-    P->>A: HTTP request with<br/>Authorization: Bearer <JWE><br/>X-Auth-Salt: <salt>
-    A->>A: Decode JWE with correct salt<br/>Extract user.id from sub claim
-    A->>DB: Prisma query with userId
-    DB-->>A: Data
-    A-->>P: JSON response
-    P-->>B: Proxied response
-    Note over B,A: JWE token never touches browser→backend directly.<br/>No cross-domain cookie leakage.
-```
+### 2. The Backend: Express.js (TypeScript ESM)
+- **Why Express and not Next.js API Routes?** Moving the heavy lifting (LLM streaming, Razorpay webhooks, analytical aggregations, PDF generation) to a dedicated Node.js/Express server bypasses Vercel's strict serverless timeout limits (10s-60s max execution). It allows the backend to run as a long-lived process, crucial for real-time presence heartbeats.
 
-**Key technical decisions:**
-- **JWE Salt-Aware Middleware:** NextAuth v5 derives the JWE decryption salt from the cookie name (`__Secure-authjs.session-token` on HTTPS, `authjs.session-token` in dev). The proxy forwards the cookie name as `X-Auth-Salt` so the backend always uses the correct salt.
-- **Server-to-Server Only:** The `Authorization: Bearer` header is added exclusively on the Next.js server — never in client-side code. Zero token leakage to the browser.
-- **Strict env-var enforcement:** `process.env` is validated at startup. Missing variables cause immediate exit — no silent runtime failures.
+### 3. Database & ORM: PostgreSQL + Prisma
+- **Why PostgreSQL?** Highly relational mapping is crucial for WordSage. `Users` have `Profiles`, which belong to `Teams`, which have `Style Guides` and `Documents`, which have `Revisions` and `Analytics`. Native `JSONB` columns in Postgres allow schema-less flexibility (e.g., storing arbitrary document metadata or AI violation rules) while maintaining strict constraint integrity for the `SkillsCoins` economy.
+- **Why Prisma Engine?** End-to-end type safety. Prisma auto-generates TypeScript interfaces reflecting the exact database schema, preventing catastrophic runtime type errors when joining across the 21 models.
+
+### 4. Authentication: NextAuth v5 bridging to Express
+- **The Problem:** Vercel (Frontend) and Render (Backend) are on different domains. Browsers aggressively block cross-site cookies, meaning API calls drop their sessions.
+- **The Codebase Solution (`frontend/src/app/api/proxy/[...path]/route.ts`):** Built a custom Next.js server-side proxy. The Next.js server securely reads the HTTP-only `__Secure-authjs.session-token`, extracts the encrypted JWE string, and forwards it to Express as an `Authorization: Bearer <token>` header alongside an `X-Auth-Salt` header. Express then decrypts this JWE independently. This brilliantly ensures **zero authentication token leakage to the DOM**.
+
+### 5. Micro-Implementations & Hardening
+- **Disposable Email Blocking:** A local Hash Set evaluation of 400+ temporary email domains (`backend/src/lib/disposable-emails.ts`) prevents rampant bot abuse and protects the LLM billing budget from malicious actors.
+- **Secure Password Resets:** Password reset tokens avoid predictable `Math.random()` seeds, utilizing `crypto.randomBytes(64).toString('hex')`. Flow includes silent failover logic to prevent email enumeration (endpoint always returning a generic success).
+- **Express Trust Proxy Array:** Configured `app.set('trust proxy', 1)` to accurately detect `X-Forwarded-For` client IPs passing through the Next.js proxy, allowing `express-rate-limit` to accurately throttle IPs requesting OTPs or Password Resets (5 req / 15 min).
 
 ---
 
-## 🤖 AI Writing Engine
+## 🤖 The AI Engine Architecture
+
+WordSage implements an advanced, constraint-based LLM pipeline.
 
 ```mermaid
 flowchart LR
-    subgraph "User Input"
-        TEXT[Selected Text]
-        ACTION[AI Action Choice]
-        TEAM{In Team<br/>Workspace?}
-    end
-
-    subgraph "Style Enforcement"
-        STYLE[Team Style Guide\nbrand voice · tone\napproved/forbidden terms]
-        VIOLATIONS[Violation Detection\nreturns violations array]
-    end
-
-    subgraph "LLM Pipeline"
-        PROMPT[Prompt Builder\naction-specific system prompt]
-        OPENROUTER[OpenRouter API\nLLM Gateway]
-        RESULT[AI Generated Text]
-    end
-
-    subgraph "Post-Processing"
-        COIN[Deduct SkillsCoins\natomic DB transaction]
-        LOG[Write ai_usage_analytics\naction · tokens · latency · coins]
-        OUT[Return to User]
-    end
-
-    TEXT --> ACTION
-    ACTION --> TEAM
-    TEAM -->|Yes| STYLE
-    STYLE --> VIOLATIONS
-    VIOLATIONS --> PROMPT
-    TEAM -->|No| PROMPT
-    PROMPT --> OPENROUTER
-    OPENROUTER --> RESULT
-    RESULT --> COIN
-    COIN --> LOG
-    LOG --> OUT
+    TEXT[Input Text] --> TEAM{In Team Workspace?}
+    TEAM -->|Yes| FetchStyle[Fetch Team Style Guide]
+    FetchStyle --> Check[Check Brand Voice & Forbidden Words]
+    Check --> Prompt[Inject Dynamic Constraints into System Prompt]
+    TEAM -->|No| Prompt
+    Prompt --> OpenRouter[OpenRouter Gateway]
+    OpenRouter --> Result[Streamed Chunk Result]
+    Result --> Deduct[Transaction: Deduct Coins]
+    Deduct --> Log[Write ai_usage_analytics]
 ```
 
-### Standard AI Actions
-
-| Action | Coin Cost | Description |
-|---|---|---|
-| Fix Grammar | 5 | Corrects grammar, punctuation, and spelling |
-| Improve Writing | 10 | Enhances clarity, flow, and word choice |
-| Rewrite | 15 | Fully rewrites while preserving original meaning |
-| Summarize | 8 | Condenses long-form content to key points |
-| Expand | 15 | Elaborates and fleshes out brief drafts |
-| Custom Prompt | 20 | Free-form AI instruction on any selected text |
-
-### Advanced AI Features
-
-| Feature | Coin Cost | Description |
-|---|---|---|
-| Plagiarism Check | 30 | Detects potential plagiarism; stores similarity scores + sources |
-| Rewrite Unique | 25 | Generates a verified plagiarism-free unique rewrite |
-| Humanize | 20 | Makes AI-generated text sound authentically human |
-| Bypass AI Detector | 20 | Restructures text to evade AI detection classifiers |
-| Generate Citation | 10 | Creates properly formatted academic citations |
-
-**Team-Aware AI:** Every LLM request inside a team workspace is contextually constrained by the team's style guide — brand voice, tone, approved/forbidden terms — enforced in real-time before generation. Violations are returned inline as a `violations[]` array.
+- **Plagiarism Engine:** Cross-references generated outputs against known sources, attaching a robust similarity score.
+- **AI Humanizer & Detector Bypass:** Uses specialized prompt engineering and restructuring algorithms to artificially lower LLM perplexity and burstiness, making outputs pass common AI detectors like Turnitin or Originality.ai.
 
 ---
 
-## 💰 SkillsCoins Virtual Economy
+## 💳 The Financial Engine: SkillsCoins & Razorpay
 
-A fully transactional virtual currency system built from scratch with complete audit trails:
-
-```mermaid
-flowchart TD
-    A[Account Created] -->|+100 coins welcome bonus| B[Coin Balance]
-    C[Daily Login] -->|+10 coins streak bonus| B
-    D[Referral: Share Link] -->|+25 coins each side| B
-    E[Razorpay Purchase\nOne-Time Pack] -->|+coins after HMAC verify| B
-    F[Razorpay Subscription\nPro / Teams] -->|+1000 or +5000 coins| B
-    B -->|spend| G[AI Action]
-    G --> H[coins_transactions\nFull Audit Log]
-    G --> I[ai_usage_analytics\nAction · Words · Latency]
-```
-
-| Event | Coins |
-|---|---|
-| Account creation (welcome bonus) | +100 |
-| Daily login streak | +10/day |
-| Referral (both sides) | +25 each |
-| Pro subscription upgrade | +1,000 |
-| Teams subscription upgrade | +5,000 |
-| Custom coin packs via Razorpay | Variable |
-
-Every spend and credit is written to `coins_transactions` with: action type, transaction mode, word count, timestamp, and order/payment IDs — a full, immutable audit trail.
+- **Atomic Ledger Transactions:** Whenever an AI action completes (e.g., "Rewrite 500 words"), the Express backend wraps the coin deduction and the usage logging inside a `prisma.$transaction`. Either both succeed, or both fail, assuring impossible states do not exist.
+- **Webhook Security (`backend/src/api/razorpay.ts`):** Razorpay fires asynchronous events (e.g., `subscription.charged`). Our Express server intercepts the raw payload buffer and reconstructs the HMAC-SHA256 signature using the `RAZORPAY_WEBHOOK_SECRET` to cryptographically prove the payload is authentically from Razorpay before crediting thousands of `SkillsCoins` to a user.
 
 ---
 
-## 💳 Payment System (Razorpay)
+## 📂 Comprehensive Database Schema (21 Models)
 
-```mermaid
-sequenceDiagram
-    participant U as User
-    participant FE as Next.js Frontend
-    participant BE as Express Backend
-    participant RZ as Razorpay
-    participant DB as PostgreSQL
+```text
+users                  — Core identity (email, password hash, balance)
+user_profiles          — Gamification (login streaks, referral trees)
+accounts & sessions    — NextAuth OAuth (Google/Github) integration bindings
+verification_tokens    — Email verification
+password_reset_tokens  — Secure cryptographically generated reset links
 
-    U->>FE: Click "Buy Coins" / "Subscribe"
-    FE->>BE: POST /api/payment/create-order
-    BE->>RZ: Create Order / Subscription object
-    RZ-->>BE: order_id / subscription_id
-    BE-->>FE: Return IDs
-    FE->>RZ: Open Razorpay Checkout Modal
-    U->>RZ: Complete Payment
-    RZ-->>FE: payment_id + signature
-    FE->>BE: POST /api/payment/verify
-    BE->>BE: HMAC-SHA256 verify signature
-    BE->>DB: Atomic: credit coins + log transaction
-    DB-->>BE: Success
-    BE-->>FE: Coins credited ✓
+documents              — Core editor entities (char_count, is_public)
+revisions              — Version control tracking (cost_usd, tokens_used)
+transactions           — Granular ledger of coin deductions
 
-    Note over BE: Webhook handler also validates<br/>raw body via HMAC-SHA256<br/>before processing events
+ai_usage_analytics     — Big data logging for Dashboard metrics
+analytics              — Generic telemetry event tracking
+audit_logs             — System-wide security operation tracking
+plagiarism_checks      — History of plagiarism verification scores
+coins_transactions     — In-app economy immutable master ledger (earn/burn)
+
+subscriptions          — Razorpay subscription lifecycle states
+teams                  — Multi-tenant isolated workspace domains
+team_members           — RBAC (Owner, Admin, Member) associations
+team_style_guides      — Enforced corporate branding JSON rules
+team_content_library   — Approved asset repository
+document_versions      — Collaborative git-like history
+document_comments      — Threaded inline prose-mirror comments
+document_presence      — Real-time cursor presence heartbeat tracking
 ```
 
 ---
 
-## 👥 Multi-Tenant Team Workspace
-
-```mermaid
-erDiagram
-    teams {
-        uuid id PK
-        string name
-        uuid owner_id FK
-        string subscription_tier
-        int max_members
-    }
-    team_members {
-        uuid team_id FK
-        uuid user_id FK
-        string role "owner/admin/member"
-        string status "pending/active"
-    }
-    team_style_guides {
-        uuid team_id FK
-        string brand_voice
-        string tone
-        json approved_terms
-        json forbidden_terms
-        json custom_rules
-    }
-    team_content_library {
-        uuid team_id FK
-        string title
-        string content
-        string category
-        json tags
-        bool approved
-    }
-    users {
-        uuid id PK
-        string email
-        string subscription_tier
-        int coin_balance
-    }
-
-    teams ||--o{ team_members : "has"
-    teams ||--|| team_style_guides : "configures"
-    teams ||--o{ team_content_library : "owns"
-    users ||--o{ team_members : "belongs to"
-```
-
-**Feature breakdown:**
-- **RBAC:** `owner` / `admin` / `member` — only owners/admins can invite, edit style guides, or change member roles
-- **Email-Based Invitations:** Owners invite by email; invites stay `PENDING` until accepted in-app or via one-click email link (Resend transactional email)
-- **Team Style Guide:** Configurable brand voice, tone, approved/forbidden terms, custom writing rules (sentence length, paragraph format, target audience) — enforced at AI generation time
-- **Shared Content Library:** Approved content snippets accessible to all team members
-- **Document Collaboration:** Shared editor with `document_presence` (cursor tracking), `document_comments` (threaded), `document_versions` (version history), `document_approvals` (draft → review → approved workflow)
-
----
-
-## 📊 Analytics Dashboard
-
-```mermaid
-flowchart LR
-    subgraph "Data Sources"
-        AUA[ai_usage_analytics\nper-request rows]
-        TXN[coins_transactions\nfull ledger]
-        DOCS[documents\nversion + word count]
-    end
-
-    subgraph "Computed Metrics"
-        W7[7-Day Activity Chart\ndaily requests + words]
-        FU[Feature Usage %\nper action breakdown]
-        DELTA[This Week vs Last Week\ngrowth delta]
-        PEAK[Peak Activity Day\nmost-used feature]
-    end
-
-    subgraph "Dashboard Display"
-        CHART[Bar/Line Chart]
-        STATS[Summary Stats\ntotal requests · streak · coins]
-        INSIGHTS[AI-Generated Insights\nweekly growth %]
-    end
-
-    AUA --> W7 & FU & DELTA & PEAK
-    TXN --> STATS
-    DOCS --> STATS
-    W7 --> CHART
-    FU --> CHART
-    DELTA --> INSIGHTS
-    PEAK --> INSIGHTS
-    CHART --> STATS --> INSIGHTS
-```
-
----
-
-## 📝 Document Templates Engine
-
-30+ professional templates across **10 categories**, each with structured sections, dynamic variable placeholders, and AI-optimized generation prompts:
-
-| Category | Templates |
-|---|---|
-| 📧 Email | Professional Email · Cold Outreach · Follow-up |
-| 📝 Content | Blog Post · LinkedIn Article · How-To Guide |
-| 💼 Business | Meeting Notes · Executive Summary · Project Proposal · Case Study |
-| 📢 Marketing | Product Description · Landing Page Copy · PPC Ad Copy · Press Release |
-| 📱 Social Media | Social Post · Twitter/X Thread · LinkedIn Post |
-| 🎓 Academic | Research Summary · Thesis Statement |
-| ⚙️ Technical | API Documentation · README.md · Release Notes |
-| ⚖️ Legal | Terms of Service · Privacy Policy (GDPR/CCPA) |
-| 👥 HR | Job Description · Performance Review |
-| 🏠 Other | Property Listing · Destination Guide |
-
----
-
-## 📂 Database Schema (Prisma)
-
-20 normalized PostgreSQL models with full relational integrity:
-
-```
-users                  — core user record (auth + preferences + coin_balance)
-user_profiles          — extended profile (streak · referrals · subscription tier)
-accounts               — OAuth provider accounts (NextAuth adapter)
-sessions               — NextAuth session store
-verification_tokens    — email verification tokens
-
-documents              — user documents (version · word_count · char_count)
-revisions              — document revision history (model · tokens · cost_usd)
-transactions           — coins spent per document action
-
-ai_usage_analytics     — per-request AI metrics (action · input/output length · latency · coins)
-analytics              — general event analytics (event_type · event_data · session_id)
-audit_logs             — admin audit trail (action · resource · ip · user_agent)
-plagiarism_checks      — plagiarism results (similarity_score · sources JSON)
-coins_transactions     — full coin ledger (amount · type · action · timestamp)
-
-subscriptions          — Razorpay subscription records (plan · period · status)
-
-teams                  — team workspaces (owner · tier · max_members)
-team_members           — RBAC membership (role: owner/admin/member · status)
-team_style_guides      — per-team AI style config (voice · tone · terms · rules)
-team_content_library   — approved shared content snippets (tags · approved flag)
-document_versions      — team document version history
-document_comments      — threaded inline comments (selection JSON · resolved state)
-document_presence      — real-time cursor presence (last_seen heartbeat)
-document_approvals     — document review workflow (draft → pending → approved)
-```
-
----
-
-## 🔒 Security Architecture
-
-| Layer | Implementation |
-|---|---|
-| **Transport** | HTTPS everywhere; Vercel + Render enforce TLS |
-| **Auth tokens** | JWE-encrypted sessions (NextAuth v5); never stored as plaintext |
-| **Cross-origin** | Strict CORS allowlist; validated against `ALLOWED_ORIGINS` env var |
-| **Headers** | Helmet.js (CSP, HSTS, X-Frame-Options, X-Content-Type-Options) |
-| **Rate limiting** | 100 req/min global; 20 attempts/15 min on `/api/auth/*` |
-| **Passwords** | bcryptjs hashing; never logged or returned in responses |
-| **Webhooks** | Razorpay raw-body HMAC-SHA256 signature verification before processing |
-| **Env vars** | Fail-fast at startup if any required var is missing — zero silent fallbacks |
-| **Compression** | Gzip via `compression` middleware; reduces payload size ~70% |
-
----
-
-## 🚀 Deployment Architecture
-
-```mermaid
-graph LR
-    subgraph "Production (Cloud)"
-        VERCEL[Vercel\nNext.js SSR + Edge\nAuto-deploys from main]
-        RENDER[Render\nExpress API\nPort 4000  · Auto-restart]
-        NEON[PostgreSQL\nHosted DB]
-        VERCEL -->|server-to-server\nHTTPS| RENDER
-        RENDER --> NEON
-    end
-
-    subgraph "Local Docker (Self-Hosted)"
-        NGINX2[Nginx :80\nReverse Proxy]
-        FE2[Frontend Container\n:3000]
-        BE2[Backend Container\n:4000]
-        NGINX2 --> FE2
-        NGINX2 --> BE2
-        BE2 -->|env DATABASE_URL| DB2[(PostgreSQL)]
-    end
-
-    subgraph "CI/CD"
-        GH[GitHub Push to main]
-        GH -->|Vercel webhook| VERCEL
-        GH -->|Render webhook| RENDER
-    end
-```
-
-### Environment Variables
-
-<details>
-<summary><b>Backend (.env)</b></summary>
-
-```env
-DATABASE_URL=postgresql://...
-JWT_SECRET=
-AUTH_SECRET=
-OPENROUTER_API_KEY=
-RAZORPAY_KEY_ID=
-RAZORPAY_KEY_SECRET=
-RAZORPAY_WEBHOOK_SECRET=
-RESEND_API_KEY=
-ALLOWED_ORIGINS=https://word-sage-tan.vercel.app
-PORT=4000
-NODE_ENV=production
-```
-
-</details>
-
-<details>
-<summary><b>Frontend (.env)</b></summary>
-
-```env
-NEXTAUTH_URL=https://word-sage-tan.vercel.app
-AUTH_SECRET=
-AUTH_GOOGLE_ID=
-AUTH_GOOGLE_SECRET=
-AUTH_GITHUB_ID=
-AUTH_GITHUB_SECRET=
-BACKEND_URL=https://wordsage-krvw.onrender.com
-```
-
-</details>
-
----
-
-## 🏃 Running Locally
+## 🚀 Running Locally
 
 ### Option A — Docker Compose (Recommended)
 
@@ -497,149 +187,46 @@ cd WordSage
 # 2. Fill in backend and frontend .env files
 cp backend/.env.example backend/.env
 cp frontend/.env.example frontend/.env
-# Edit both files with your credentials
+# Edit both files with your credentials (PostgreSQL, Razorpay, Resend, Auth URLs)
 
-# 3. Start all services (Nginx + Frontend + Backend)
+# 3. Start Nginx Proxy, Next.js, and Express.js
 docker compose up -d --build
 
-# App is live at http://localhost
+# App is universally live at http://localhost
 ```
 
-### Option B — Manual (Development)
+### Option B — Manual Bare-Metal Development
 
 ```bash
 # Terminal 1 — Backend
 cd backend
 npm install
-npm run dev        # tsx watch on port 4000
+npx prisma generate
+npx prisma db push       # Sync schema to your neon/postgres instance
+npm run dev              # tsx watch on port 4000
 
 # Terminal 2 — Frontend
 cd frontend
 npm install
-npm run dev        # Next.js dev on port 3000
-```
-
-### Database Setup
-
-```bash
-cd backend
-npx prisma migrate deploy   # Apply all migrations
-npx prisma generate         # Regenerate Prisma client
-npx prisma studio           # Optional: visual DB GUI
+npm run dev              # Next.js dev on port 3000
 ```
 
 ---
 
-## 📁 Project Structure
-
-```
-WordSage-prod-grade/
-├── frontend/                    # Next.js 14 App Router
-│   └── src/
-│       ├── app/
-│       │   ├── page.tsx         # Landing page
-│       │   ├── dashboard/       # Main user dashboard + analytics
-│       │   │   └── teams/       # Team workspace pages
-│       │   ├── editor/          # AI Writing editor
-│       │   ├── coin-store/      # Razorpay purchase UI
-│       │   ├── profile/         # User profile + referrals
-│       │   ├── admin/           # Admin dashboard
-│       │   └── api/
-│       │       └── proxy/       # Server-side backend proxy
-│       ├── components/          # Reusable UI components
-│       ├── lib/                 # API client + utility helpers
-│       └── auth.ts              # NextAuth v5 config
-│
-├── backend/
-│   ├── src/
-│   │   ├── index.ts             # Express app entry (SIGTERM, healthcheck)
-│   │   ├── api/                 # 14 route modules
-│   │   │   ├── ai.ts            # LLM pipeline + style enforcement
-│   │   │   ├── teams.ts         # Full RBAC team API
-│   │   │   ├── team-editor.ts   # Collaborative editing (presence, versions, comments)
-│   │   │   ├── payment.ts       # Razorpay order + verify
-│   │   │   ├── razorpay.ts      # Subscription + webhook handler
-│   │   │   ├── analytics.ts     # Usage analytics queries
-│   │   │   ├── templates.ts     # 30+ document templates
-│   │   │   ├── auth.ts          # OAuth provisioning
-│   │   │   ├── documents.ts     # Document CRUD
-│   │   │   ├── bonuses.ts       # Daily streak + referral engine
-│   │   │   ├── profile.ts       # User profile management
-│   │   │   └── transactions.ts  # Coin ledger
-│   │   ├── middleware/          # Auth + request validation
-│   │   ├── config/              # CORS + rate limiting config
-│   │   ├── services/            # Business logic services
-│   │   └── emails/              # Resend email templates
-│   └── prisma/
-│       └── schema.prisma        # 20-model PostgreSQL schema
-│
-├── nginx/
-│   └── nginx.conf               # Reverse proxy config
-├── docker-compose.yml           # Production container orchestration
-└── packages/                    # Shared TypeScript types (monorepo)
-```
-
----
-
-## 📈 Feature Summary
-
-| Feature | Status |
-|---|---|
-| 🔐 Multi-provider Auth (Credentials + Google + GitHub OAuth) | ✅ Production |
-| 🤖 AI Writing Engine (6 standard + 5 advanced actions) | ✅ Production |
-| 👥 Multi-tenant Team Workspace with RBAC | ✅ Production |
-| 💰 SkillsCoins Virtual Economy + Full Transaction Ledger | ✅ Production |
-| 💳 Razorpay Payments (one-time + monthly subscriptions) | ✅ Production |
-| 📊 Analytics Dashboard (7-day chart + AI insights) | ✅ Production |
-| 📝 30+ Document Templates across 10 categories | ✅ Production |
-| 📋 Collaborative Editing (presence, versions, comments, approvals) | ✅ Production |
-| 📧 Transactional Email (team invites via Resend) | ✅ Production |
-| 📱 Fully Responsive (320px → 1920px) | ✅ Production |
-| 🔒 Helmet.js + Rate Limiting + HMAC Webhook Verification | ✅ Production |
-| 🐳 Docker + Nginx + docker-compose (self-hosted ready) | ✅ Production |
-| 🚀 Vercel (frontend) + Render (backend) CD pipeline | ✅ Production |
-
----
-
-## 🏆 Resume-Ready Bullet Points
-
-```
-• Architected and deployed WordSage, a production-grade SaaS AI writing platform on
-  Next.js 14 (App Router) + Express.js + PostgreSQL, serving full authentication,
-  payments, and real-time team collaboration.
-
-• Engineered a cross-domain proxy layer in Next.js to solve browser cross-origin cookie
-  restrictions — forwarding NextAuth JWE session tokens as Bearer headers with correct
-  JWE salt, eliminating 500-class auth regressions across Vercel → Render deployments.
-
-• Built a 6-action + 5-advanced-feature LLM pipeline (OpenRouter) with per-action
-  SkillsCoin cost enforcement, full transaction audit logging, ai_usage_analytics
-  instrumentation, and team-aware style-guide enforcement injected pre-generation.
-
-• Designed and implemented a Razorpay payment system supporting one-time coin purchases
-  and monthly recurring subscriptions, with HMAC-SHA256 webhook signature verification
-  and atomic PostgreSQL writes via Prisma.
-
-• Built a multi-tenant team collaboration workspace with RBAC (owner/admin/member),
-  Resend email invitations, shared content library, configurable style guides, and
-  real-time style violation detection injected into the AI generation pipeline.
-
-• Created a 30+ professional template engine across 10 content categories, each with
-  structured sections, dynamic variable placeholders, and AI-optimized prompts.
-
-• Designed a 20-model PostgreSQL schema with Prisma ORM covering users, teams, RBAC,
-  documents, versioning, collaborative presence, coin economy, and analytics.
-
-• Hardened the backend with Helmet.js CSP headers, global rate limiting (100 req/min),
-  strict auth rate limiting (20/15 min), Gzip compression, and SIGTERM graceful
-  shutdown — production-ready for zero-downtime deploys.
-
-• Containerised the full stack with Docker Compose + Nginx reverse proxy;
-  deployed to Vercel + Render with GitHub-triggered CI/CD pipelines.
-```
+## 📈 Final Features Checklist
+- [x] Multi-provider Auth (Credentials + Google + GitHub OAuth)
+- [x] Secure Password Reset (Tokens, Temp Email Blocking, Atomic DB transactions)
+- [x] AI Engine (11 actions: Grammar, Summarize, Plagiarism, Humanize, etc.)
+- [x] Multi-tenant Team Workspace with RBAC
+- [x] Real-time Collaborative Editing (Presence, Comments, Approvals)
+- [x] SkillsCoins Virtual Economy + Immutable Transaction Ledger
+- [x] Razorpay Financials (Coin Packs + Recurring Cron Subscriptions)
+- [x] Next.js 14 SSR + Long-lived Express.js API + PostgreSQL Architecture
+- [x] Docker + Nginx Containerization
 
 ---
 
 <p align="center">
-  Built with ❤️ and shipped to production · <a href="https://word-sage-tan.vercel.app">word-sage-tan.vercel.app</a>
+  Architected and shipped to production by <strong>Shitesh</strong>. <br/>
+  <a href="https://word-sage-tan.vercel.app">word-sage-tan.vercel.app</a>
 </p>
