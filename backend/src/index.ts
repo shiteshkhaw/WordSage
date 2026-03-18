@@ -24,6 +24,7 @@ import { bonusesRouter } from "./api/bonuses.js";
 import { templatesRouter } from "./api/templates.js";
 import { analyticsRouter } from "./api/analytics.js";
 import { teamEditorRouter } from "./api/team-editor.js";
+import { passwordResetRouter } from "./api/password-reset.js";
 
 /* ---------------------------------------------
    ENVIRONMENT VALIDATION (STARTUP)
@@ -45,6 +46,9 @@ console.log('✅ Environment validation passed');
 const app = express();
 const PORT = process.env.PORT || 4000;
 const isProduction = process.env.NODE_ENV === 'production';
+
+// Trust proxy (required for express-rate-limit when behind Vercel/Docker/Nginx)
+app.set('trust proxy', 1);
 
 /* ---------------------------------------------
    SECURITY HEADERS (Helmet)
@@ -76,6 +80,13 @@ const authLimiter = rateLimit({
    windowMs: 15 * 60 * 1000, // 15 minutes
    max: 20, // 20 attempts per 15 min
    message: { error: 'Too many auth attempts, please try again later.' },
+});
+
+// Even tighter rate limit for password reset requests (anti-abuse)
+const passwordResetLimiter = rateLimit({
+   windowMs: 15 * 60 * 1000, // 15 minutes
+   max: 5, // 5 attempts per 15 min per IP
+   message: { error: 'Too many password reset requests. Please wait before trying again.' },
 });
 
 /* ---------------------------------------------
@@ -132,6 +143,9 @@ app.use("/api/razorpay", razorpayRouter);
 // Teams router (needs JSON + auth already applied above)
 app.use("/api/teams", teamsRouter);
 app.use("/api/team-editor", teamEditorRouter); // Team editor advanced features
+
+// Password reset (public, rate-limited)
+app.use("/api/password-reset", passwordResetLimiter, passwordResetRouter);
 
 /* ---------------------------------------------
    ROOT
