@@ -25,6 +25,7 @@ import { templatesRouter } from "./api/templates.js";
 import { analyticsRouter } from "./api/analytics.js";
 import { teamEditorRouter } from "./api/team-editor.js";
 import { passwordResetRouter } from "./api/password-reset.js";
+import { notificationsRouter } from "./api/notifications.js";
 
 /* ---------------------------------------------
    ENVIRONMENT VALIDATION (STARTUP)
@@ -139,6 +140,7 @@ app.use("/api/analytics", analyticsRouter); // Analytics endpoint
 app.use("/api/ai", aiRouter);
 app.use("/api/payment", paymentRouter);
 app.use("/api/razorpay", razorpayRouter);
+app.use("/api/notifications", notificationsRouter);
 
 // Teams router (needs JSON + auth already applied above)
 app.use("/api/teams", teamsRouter);

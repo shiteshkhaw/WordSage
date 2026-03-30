@@ -84,20 +84,17 @@ export default function DashboardHome() {
 
   const loadData = async () => {
     try {
-      // 1. Profile & Stats
-      const profileRes = await apiFetch<{ data: UserProfile }>('/api/profile');
+      // Run all API requests in parallel to massively speed up dashboard load time
+      const [profileRes, docsRes, transRes, invitesRes] = await Promise.all([
+        apiFetch<{ data: UserProfile }>('/api/profile'),
+        apiFetch<{ data: Document[] }>('/api/documents'),
+        apiFetch<{ data: CoinTransaction[] }>('/api/transactions'),
+        apiFetch<{ data: TeamInvitation[] }>('/api/teams/invites')
+      ]);
+
       if (profileRes?.data) setProfile(profileRes.data);
-
-      // 2. Recent Documents
-      const docsRes = await apiFetch<{ data: Document[] }>('/api/documents');
       if (docsRes?.data) setDocuments(docsRes.data.slice(0, 5));
-
-      // 3. Transactions
-      const transRes = await apiFetch<{ data: CoinTransaction[] }>('/api/transactions');
       if (transRes?.data) setRecentTransactions(transRes.data.slice(0, 10));
-
-      // 4. Pending Invites
-      const invitesRes = await apiFetch<{ data: TeamInvitation[] }>('/api/teams/invites');
       if (invitesRes?.data) setPendingInvites(invitesRes.data);
 
       setLoading(false);

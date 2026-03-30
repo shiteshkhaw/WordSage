@@ -77,41 +77,42 @@ aiRouter.post('/process', requireAuth, async (req: AuthenticatedRequest, res: Re
     const wordCount = text.split(/\s+/).filter(Boolean).length;
     const newWordsProcessed = (profile.words_processed || 0) + wordCount;
 
-    await prisma.user_profiles.update({
-      where: { id: req.user.id },
-      data: {
-        coins_balance: newBalance,
-        total_ai_requests: newTotalRequests,
-        words_processed: newWordsProcessed
-      },
-    });
-
-    await prisma.transactions.create({
-      data: {
-        user_id: req.user.id,
-        action: `${action}_${mode || 'general'}`,
-        coins_used: coinsRequired,
-        details: {
-          action,
-          mode: mode || 'general',
-          text_length: text.length,
-          word_count: wordCount,
-          tone: tone || 'default',
-        },
-      },
-    });
-
-    // Log to ai_usage_analytics for accurate daily stats
     const outputLength = normalizedResult.result?.length || 0;
-    await prisma.ai_usage_analytics.create({
-      data: {
-        user_id: req.user.id,
-        action_type: action,
-        input_length: text.length,
-        output_length: outputLength,
-        coins_spent: coinsRequired,
-      },
-    });
+
+    // Use a single database transaction for the three post-processing updates to eliminate extra ping latency
+    await prisma.$transaction([
+      prisma.user_profiles.update({
+        where: { id: req.user.id },
+        data: {
+          coins_balance: newBalance,
+          total_ai_requests: newTotalRequests,
+          words_processed: newWordsProcessed
+        },
+      }),
+      prisma.transactions.create({
+        data: {
+          user_id: req.user.id,
+          action: `${action}_${mode || 'general'}`,
+          coins_used: coinsRequired,
+          details: {
+            action,
+            mode: mode || 'general',
+            text_length: text.length,
+            word_count: wordCount,
+            tone: tone || 'default',
+          },
+        },
+      }),
+      prisma.ai_usage_analytics.create({
+        data: {
+          user_id: req.user.id,
+          action_type: action,
+          input_length: text.length,
+          output_length: outputLength,
+          coins_spent: coinsRequired,
+        },
+      })
+    ]);
 
     res.json({
       result: normalizedResult.result,
@@ -171,39 +172,40 @@ aiRouter.post('/advanced', requireAuth, async (req: AuthenticatedRequest, res: R
     const wordCount = text.split(/\s+/).filter(Boolean).length;
     const newWordsProcessed = (profile.words_processed || 0) + wordCount;
 
-    await prisma.user_profiles.update({
-      where: { id: req.user.id },
-      data: {
-        coins_balance: newBalance,
-        total_ai_requests: newTotalRequests,
-        words_processed: newWordsProcessed
-      },
-    });
-
-    await prisma.transactions.create({
-      data: {
-        user_id: req.user.id,
-        action: action,
-        coins_used: coinsRequired,
-        details: {
-          action,
-          text_length: text.length,
-          word_count: wordCount,
-        },
-      },
-    });
-
-    // Log to ai_usage_analytics for accurate daily stats
     const outputLength = normalizedResult.result?.length || 0;
-    await prisma.ai_usage_analytics.create({
-      data: {
-        user_id: req.user.id,
-        action_type: action,
-        input_length: text.length,
-        output_length: outputLength,
-        coins_spent: coinsRequired,
-      },
-    });
+
+    // Use a single database transaction for post-processing AI logic
+    await prisma.$transaction([
+      prisma.user_profiles.update({
+        where: { id: req.user.id },
+        data: {
+          coins_balance: newBalance,
+          total_ai_requests: newTotalRequests,
+          words_processed: newWordsProcessed
+        },
+      }),
+      prisma.transactions.create({
+        data: {
+          user_id: req.user.id,
+          action: action,
+          coins_used: coinsRequired,
+          details: {
+            action,
+            text_length: text.length,
+            word_count: wordCount,
+          },
+        },
+      }),
+      prisma.ai_usage_analytics.create({
+        data: {
+          user_id: req.user.id,
+          action_type: action,
+          input_length: text.length,
+          output_length: outputLength,
+          coins_spent: coinsRequired,
+        },
+      })
+    ]);
 
     res.json({
       success: true,
@@ -310,45 +312,45 @@ aiRouter.post('/team-process', requireAuth, async (req: AuthenticatedRequest, re
     const newTotalRequests = (profile.total_ai_requests || 0) + 1;
     const newWordsProcessed = (profile.words_processed || 0) + wordCount;
 
-    await prisma.user_profiles.update({
-      where: { id: req.user.id },
-      data: {
-        coins_balance: newBalance,
-        total_ai_requests: newTotalRequests,
-        words_processed: newWordsProcessed,
-      },
-    });
-
-    // Log transaction
-    await prisma.transactions.create({
-      data: {
-        user_id: req.user.id,
-        action: `${action}_${mode || 'general'}_team`,
-        coins_used: coinsRequired,
-        details: {
-          action,
-          mode: mode || 'general',
-          team_id: teamId,
-          style_guide_applied: result.styleGuideApplied,
-          violations_count: result.violations.length,
-          text_length: text.length,
-          word_count: wordCount,
-          tone: tone || 'default',
-        },
-      },
-    });
-
-    // Log to ai_usage_analytics for accurate daily stats
     const outputLength = typeof result.result === 'string' ? result.result.length : 0;
-    await prisma.ai_usage_analytics.create({
-      data: {
-        user_id: req.user.id,
-        action_type: `${action}_team`,
-        input_length: text.length,
-        output_length: outputLength,
-        coins_spent: coinsRequired,
-      },
-    });
+
+    // Combine updates into a single transaction to reduce ping overhead
+    await prisma.$transaction([
+      prisma.user_profiles.update({
+        where: { id: req.user.id },
+        data: {
+          coins_balance: newBalance,
+          total_ai_requests: newTotalRequests,
+          words_processed: newWordsProcessed,
+        },
+      }),
+      prisma.transactions.create({
+        data: {
+          user_id: req.user.id,
+          action: `${action}_${mode || 'general'}_team`,
+          coins_used: coinsRequired,
+          details: {
+            action,
+            mode: mode || 'general',
+            team_id: teamId,
+            style_guide_applied: result.styleGuideApplied,
+            violations_count: result.violations.length,
+            text_length: text.length,
+            word_count: wordCount,
+            tone: tone || 'default',
+          },
+        },
+      }),
+      prisma.ai_usage_analytics.create({
+        data: {
+          user_id: req.user.id,
+          action_type: `${action}_team`,
+          input_length: text.length,
+          output_length: outputLength,
+          coins_spent: coinsRequired,
+        },
+      })
+    ]);
 
     // Normalize the team AI result
     const output = typeof result.result === 'string' ? result.result : String(result.result || '');

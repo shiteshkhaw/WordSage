@@ -94,8 +94,20 @@ export default function DashboardLayout({
         const profileRes = await apiFetch<{ data?: any }>("/api/profile");
         if (profileRes?.data) {
           setProfile(profileRes.data);
-          await loadNotifications(user.id, profileRes.data);
-          await checkDailyCoins(user.id, profileRes.data);
+          
+          // Blindly check daily coins. The backend safely prevents double-dipping.
+          await checkDailyCoins();
+          // Load real notifications from backend DB
+          await loadNotifications();
+          
+          // Show welcome popup if eligible
+          const welcomeShown = localStorage.getItem(`wordsage_welcome_shown_${user.id}`);
+          const accountAge = new Date().getTime() - new Date(profileRes.data.created_at || new Date()).getTime();
+          if (accountAge < 24 * 60 * 60 * 1000 && profileRes.data.coins_balance >= 100 && !welcomeShown) {
+             setShowWelcomePopup(true);
+             setTimeout(() => setShowWelcomePopup(false), 5000);
+             localStorage.setItem(`wordsage_welcome_shown_${user.id}`, "true");
+          }
         }
       } catch (error) {
         console.error("Load profile error:", error);
@@ -104,87 +116,62 @@ export default function DashboardLayout({
     checkUser();
   }, [status, user?.id]);
 
-  const loadNotifications = async (userId: string, profile: any) => {
-    const notifs: Notification[] = [];
-    const welcomeShown = localStorage.getItem(`wordsage_welcome_shown_${userId}`);
-    const accountAge =
-      new Date().getTime() - new Date(profile?.created_at || new Date()).getTime();
-    const isNewUser = accountAge < 24 * 60 * 60 * 1000;
-
-    if (isNewUser && profile?.coins_balance >= 100 && !welcomeShown) {
-      notifs.push({
-        id: "welcome",
-        title: "🎉 Welcome Bonus!",
-        message: "100 SkillsCoins credited to your account as a welcome gift!",
-        type: "welcome",
-        created_at: profile.created_at,
-        read: false,
-      });
-      setShowWelcomePopup(true);
-      setTimeout(() => setShowWelcomePopup(false), 5000);
-      localStorage.setItem(`wordsage_welcome_shown_${userId}`, "true");
-    }
-    setNotifications(notifs);
-  };
-
-  const checkDailyCoins = async (userId: string, currentProfile: any) => {
-    const today = new Date().toISOString().split("T")[0];
-    const lastLogin = currentProfile?.last_daily_coin_date;
-    const dailyShownToday = localStorage.getItem(
-      `wordsage_daily_shown_${userId}_${today}`
-    );
-
-    if (lastLogin !== today && !dailyShownToday) {
-      try {
-        const res = await apiFetch<{
-          granted?: boolean;
-          coins?: number;
-          newBalance?: number;
-          streak?: number;
-        }>("/api/bonuses/daily", { method: "POST" });
-
-        if (res?.granted) {
-          const { coins, newBalance, streak } = res;
-          setProfile((prev: any) => ({
-            ...prev,
-            coins_balance: newBalance,
-            login_streak: streak,
-            last_daily_coin_date: today,
-          }));
-          const streakMessage =
-            streak && streak > 1 ? `${streak}-day streak 🔥` : "";
-          const message = streakMessage
-            ? `${coins || 10} SkillsCoins credited for logging in today! • ${streakMessage}`
-            : `${coins || 10} SkillsCoins credited for logging in today!`;
-
-          setNotifications((prev) => [
-            {
-              id: `daily-${today}`,
-              title: "✨ Daily Login Bonus",
-              message,
-              type: "daily_bonus",
-              created_at: new Date().toISOString(),
-              read: false,
-            },
-            ...prev,
-          ]);
-          setShowDailyCoinPopup(true);
-          setTimeout(() => setShowDailyCoinPopup(false), 5000);
-        }
-      } catch (error) {
-        console.error("Daily bonus error:", error);
+  const loadNotifications = async () => {
+    try {
+      const res = await apiFetch<{ data: Notification[] }>('/api/notifications');
+      if (res?.data) {
+        setNotifications(res.data);
       }
-      localStorage.setItem(`wordsage_daily_shown_${userId}_${today}`, "true");
+    } catch (error) {
+      console.error('List notifs error:', error);
     }
   };
 
-  const markNotificationAsRead = (id: string) => {
-    setNotifications(
-      notifications.map((n) => (n.id === id ? { ...n, read: true } : n))
-    );
+  const checkDailyCoins = async () => {
+    try {
+      const res = await apiFetch<{
+        granted?: boolean;
+        coins?: number;
+        newBalance?: number;
+        streak?: number;
+        message?: string;
+      }>("/api/bonuses/daily", { method: "POST" });
+
+      if (res?.granted) {
+        setProfile((prev: any) => ({
+          ...prev,
+          coins_balance: res.newBalance,
+          login_streak: res.streak,
+        }));
+        setShowDailyCoinPopup(true);
+        setTimeout(() => setShowDailyCoinPopup(false), 5000);
+        // Next time loadNotifications runs, it will grab the created backend log!
+      }
+    } catch (error) {
+      console.error("Daily bonus fetch error:", error);
+    }
   };
 
-  const clearAllNotifications = () => setNotifications([]);
+  const markNotificationAsRead = async (id: string) => {
+    // Delete one-by-one (Clear)
+    setNotifications(notifications.filter((n) => n.id !== id));
+    try {
+        await apiFetch(`/api/notifications/${id}/read`, { method: 'POST' });
+    } catch (error) {
+        console.error('Mark read error:', error);
+    }
+  };
+
+  const clearAllNotifications = async () => {
+    // Clear All
+    setNotifications([]);
+    try {
+        await apiFetch(`/api/notifications/all`, { method: 'DELETE' });
+    } catch (error) {
+        console.error('Clear all error:', error);
+    }
+  };
+
   const unreadCount = notifications.filter((n) => !n.read).length;
 
   const handleSignOut = async () => {

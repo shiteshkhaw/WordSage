@@ -166,6 +166,20 @@ model documents {
   @@index([user_id])
 }
 
+model notifications {
+  id         String   @id @default(uuid())
+  user_id    String
+  title      String
+  message    String
+  type       String   @default("info")
+  read       Boolean  @default(false)
+  created_at DateTime @default(now())
+  users      users    @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@index([created_at(sort: Desc)])
+}
+
 model plagiarism_checks {
   id              String   @id @default(uuid())
   userId          String
@@ -338,6 +352,7 @@ model users {
   team_style_guides                                            team_style_guides[]
   teams                                                        teams[]
   transactions                                                 transactions[]
+  notifications                                                notifications[]
   user_profiles                                                user_profiles?
 }
 
