@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { apiFetch } from "@/lib/api";
 import { useRouter } from "next/navigation";
+import useSWR from "swr";
 
 // Types
 interface UserProfile {
@@ -49,14 +50,21 @@ export default function DashboardHome() {
   const user = session?.user;
   const router = useRouter();
 
-  const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [documents, setDocuments] = useState<Document[]>([]);
-  const [recentTransactions, setRecentTransactions] = useState<CoinTransaction[]>([]);
-  const [pendingInvites, setPendingInvites] = useState<TeamInvitation[]>([]);
+  // SWR Hooks for global caching & instant load
+  const { data: profileRes } = useSWR(user ? '/api/profile' : null, (url) => apiFetch<{ data?: UserProfile }>(url));
+  const { data: docsRes } = useSWR(user ? '/api/documents' : null, (url) => apiFetch<{ data?: Document[] }>(url));
+  const { data: transRes } = useSWR(user ? '/api/transactions' : null, (url) => apiFetch<{ data?: CoinTransaction[] }>(url));
+  const { data: invitesRes, mutate: mutateInvites } = useSWR(user ? '/api/teams/invites' : null, (url) => apiFetch<{ data?: TeamInvitation[] }>(url));
+
+  const profile = profileRes?.data || null;
+  const documents = docsRes?.data?.slice(0, 5) || [];
+  const recentTransactions = transRes?.data?.slice(0, 10) || [];
+  const pendingInvites = invitesRes?.data || [];
 
   const [animateStats, setAnimateStats] = useState(false);
   const [dateTime, setDateTime] = useState("");
-  const [loading, setLoading] = useState(true);
+  // Only loading if profile isn't cached yet
+  const loading = !profile && status !== "unauthenticated";
 
   const [copiedReferral, setCopiedReferral] = useState(false);
 
@@ -68,41 +76,15 @@ export default function DashboardHome() {
       return;
     }
 
-    // Initial Load
-    loadData();
     updateDateTime();
     setTimeout(() => setAnimateStats(true), 200);
 
     const dateInterval = setInterval(updateDateTime, 60000);
-    const pollInterval = setInterval(loadData, 10000); // Poll every 10s
 
     return () => {
       clearInterval(dateInterval);
-      clearInterval(pollInterval);
     };
   }, [user, status]);
-
-  const loadData = async () => {
-    try {
-      // Run all API requests in parallel to massively speed up dashboard load time
-      const [profileRes, docsRes, transRes, invitesRes] = await Promise.all([
-        apiFetch<{ data: UserProfile }>('/api/profile'),
-        apiFetch<{ data: Document[] }>('/api/documents'),
-        apiFetch<{ data: CoinTransaction[] }>('/api/transactions'),
-        apiFetch<{ data: TeamInvitation[] }>('/api/teams/invites')
-      ]);
-
-      if (profileRes?.data) setProfile(profileRes.data);
-      if (docsRes?.data) setDocuments(docsRes.data.slice(0, 5));
-      if (transRes?.data) setRecentTransactions(transRes.data.slice(0, 10));
-      if (invitesRes?.data) setPendingInvites(invitesRes.data);
-
-      setLoading(false);
-    } catch (error) {
-      console.error("Dashboard load error:", error);
-      setLoading(false);
-    }
-  };
 
   const acceptInvitation = async (teamId: string, inviteId: string) => {
     try {
@@ -111,7 +93,7 @@ export default function DashboardHome() {
       });
       if (response?.success) {
         alert('✅ Successfully joined the team!');
-        loadData(); // Refresh all
+        mutateInvites(); // Refresh invites automatically
       } else {
         alert(`❌ Error: ${response?.error || 'Failed to join'}`);
       }
@@ -128,7 +110,7 @@ export default function DashboardHome() {
       });
       if (response?.success) {
         alert('✅ Invitation declined');
-        loadData();
+        mutateInvites();
       } else {
         alert(`❌ Error: ${response?.error || 'Failed'}`);
       }

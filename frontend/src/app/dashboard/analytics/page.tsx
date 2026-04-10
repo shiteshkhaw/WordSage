@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { apiFetch } from "@/lib/api";
+import useSWR from "swr";
 
 interface DailyStats {
   day: string;
@@ -44,90 +45,20 @@ export default function AnalyticsPage() {
   const user = session?.user;
   const loading = status === "loading";
 
-  const [profile, setProfile] = useState<any>(null);
-  const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
+  const { data: profileRes } = useSWR(user ? '/api/profile' : null, (url) => apiFetch<{ data?: any }>(url));
+  const { data: analyticsRes } = useSWR(user ? '/api/analytics' : null, (url) => apiFetch<{ data?: AnalyticsData }>(url), { refreshInterval: 30000 });
+  const profile = profileRes?.data || null;
+  const analytics = analyticsRes?.data || null;
+
   const [timeRange, setTimeRange] = useState("week");
   const [animateStats, setAnimateStats] = useState(false);
   const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
-    let pollInterval: NodeJS.Timeout;
-
-    const loadData = async () => {
-      if (status === "authenticated" && user) {
-        await Promise.all([loadUserProfile(), loadAnalytics()]);
-        pollInterval = startDataPolling();
-      }
-    };
-
-    if (status !== "loading") {
-      loadData();
+    if (profile && analytics) {
+      setTimeout(() => setAnimateStats(true), 200);
     }
-
-    setTimeout(() => setAnimateStats(true), 200);
-
-    return () => {
-      if (pollInterval) clearInterval(pollInterval);
-    };
-  }, [status, user]);
-
-  const loadUserProfile = async () => {
-    try {
-      const res = await apiFetch<{ data?: any }>('/api/profile');
-      if (res?.data) {
-        setProfile(res.data);
-      }
-    } catch (error) {
-      console.error('Load profile error:', error);
-    }
-  };
-
-  const loadAnalytics = async () => {
-    try {
-      const res = await apiFetch<{ data?: AnalyticsData }>('/api/analytics');
-      if (res?.data) {
-        setAnalytics(res.data);
-      }
-    } catch (error) {
-      console.error('Load analytics error:', error);
-    }
-  };
-
-  const startDataPolling = () => {
-    console.log('🔄 Analytics: Starting auto-refresh (every 30 seconds)');
-
-    const pollInterval = setInterval(async () => {
-      try {
-        const [profileRes, analyticsRes] = await Promise.all([
-          apiFetch<{ data?: any }>('/api/profile'),
-          apiFetch<{ data?: AnalyticsData }>('/api/analytics'),
-        ]);
-
-        if (profileRes?.data) {
-          setProfile((prevProfile: any) => {
-            const hasChanges =
-              prevProfile?.coins_balance !== profileRes.data.coins_balance ||
-              prevProfile?.total_ai_requests !== profileRes.data.total_ai_requests;
-
-            if (hasChanges) {
-              setAnimateStats(false);
-              setTimeout(() => setAnimateStats(true), 50);
-              return profileRes.data;
-            }
-            return prevProfile;
-          });
-        }
-
-        if (analyticsRes?.data) {
-          setAnalytics(analyticsRes.data);
-        }
-      } catch (error) {
-        console.error('Analytics refresh error:', error);
-      }
-    }, 30000); // Refresh every 30 seconds
-
-    return pollInterval;
-  };
+  }, [profile, analytics]);
 
   const AnimatedNumber = ({ value, decimals = 0 }: { value: number; decimals?: number }) => {
     const [displayValue, setDisplayValue] = useState(0);

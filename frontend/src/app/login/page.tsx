@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useState, useTransition, useEffect } from 'react';
 import { signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -10,8 +10,25 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isPending, startTransition] = useTransition();
+  const [isWakingUp, setIsWakingUp] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const router = useRouter();
+
+  // Stealth ping on mount to wake up the backend
+  useEffect(() => {
+    fetch('/api/wakeup').catch(() => {});
+  }, []);
+
+  // UI status poller
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (isPending) {
+      timer = setTimeout(() => setIsWakingUp(true), 3000);
+    } else {
+      setIsWakingUp(false);
+    }
+    return () => clearTimeout(timer);
+  }, [isPending]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -172,7 +189,7 @@ export default function LoginPage() {
             {isPending ? (
               <div className="flex items-center justify-center space-x-2">
                 <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
-                <span>Signing in...</span>
+                <span>{isWakingUp ? 'Waking up secure servers...' : 'Signing in...'}</span>
               </div>
             ) : (
               'Sign In'

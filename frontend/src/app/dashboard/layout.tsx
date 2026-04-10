@@ -5,6 +5,7 @@ import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import { useSession, signOut } from "next-auth/react";
 import { apiFetch } from "@/lib/api";
+import useSWR from "swr";
 import MobileBottomNav from "@/components/MobileBottomNav";
 
 interface Notification {
@@ -27,7 +28,13 @@ export default function DashboardLayout({
   const user = session?.user;
   const loading = status === "loading";
 
-  const [profile, setProfile] = useState<any>(null);
+  const { data: profileRes, mutate: mutateProfile } = useSWR(
+    user ? "/api/profile" : null,
+    (url) => apiFetch<{ data?: any }>(url),
+    { revalidateOnFocus: false }
+  );
+  const profile = profileRes?.data;
+
   // Start closed; mount effect will open on desktop
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -91,10 +98,7 @@ export default function DashboardLayout({
       initRanRef.current = true;
 
       try {
-        const profileRes = await apiFetch<{ data?: any }>("/api/profile");
-        if (profileRes?.data) {
-          setProfile(profileRes.data);
-          
+        if (profile) {
           // Blindly check daily coins. The backend safely prevents double-dipping.
           await checkDailyCoins();
           // Load real notifications from backend DB
@@ -102,8 +106,8 @@ export default function DashboardLayout({
           
           // Show welcome popup if eligible
           const welcomeShown = localStorage.getItem(`wordsage_welcome_shown_${user.id}`);
-          const accountAge = new Date().getTime() - new Date(profileRes.data.created_at || new Date()).getTime();
-          if (accountAge < 24 * 60 * 60 * 1000 && profileRes.data.coins_balance >= 100 && !welcomeShown) {
+          const accountAge = new Date().getTime() - new Date(profile.created_at || new Date()).getTime();
+          if (accountAge < 24 * 60 * 60 * 1000 && profile.coins_balance >= 100 && !welcomeShown) {
              setShowWelcomePopup(true);
              setTimeout(() => setShowWelcomePopup(false), 5000);
              localStorage.setItem(`wordsage_welcome_shown_${user.id}`, "true");
@@ -113,8 +117,11 @@ export default function DashboardLayout({
         console.error("Load profile error:", error);
       }
     };
-    checkUser();
-  }, [status, user?.id]);
+    // Ensure checkUser runs after profile is loaded
+    if (profile) {
+      checkUser();
+    }
+  }, [status, user?.id, profile]);
 
   const loadNotifications = async () => {
     try {
@@ -138,11 +145,14 @@ export default function DashboardLayout({
       }>("/api/bonuses/daily", { method: "POST" });
 
       if (res?.granted) {
-        setProfile((prev: any) => ({
+        mutateProfile((prev: any) => ({
           ...prev,
-          coins_balance: res.newBalance,
-          login_streak: res.streak,
-        }));
+          data: {
+            ...prev?.data,
+            coins_balance: res.newBalance,
+            login_streak: res.streak,
+          }
+        }), false);
         setShowDailyCoinPopup(true);
         setTimeout(() => setShowDailyCoinPopup(false), 5000);
         // Next time loadNotifications runs, it will grab the created backend log!

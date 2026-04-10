@@ -43,6 +43,23 @@ function SignUpContent() {
   const [detectingLocation, setDetectingLocation] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [isWakingUp, setIsWakingUp] = useState(false);
+
+  // Stealth ping on mount to wake up the backend
+  useEffect(() => {
+    fetch('/api/wakeup').catch(() => {});
+  }, []);
+
+  // UI status poller
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (isPending) {
+      timer = setTimeout(() => setIsWakingUp(true), 3000);
+    } else {
+      setIsWakingUp(false);
+    }
+    return () => clearTimeout(timer);
+  }, [isPending]);
 
   useEffect(() => {
     detectLocation();
@@ -385,7 +402,7 @@ function SignUpContent() {
             {isPending ? (
               <div className="flex items-center justify-center space-x-2">
                 <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
-                <span>Creating account...</span>
+                <span>{isWakingUp ? 'Waking up secure servers...' : 'Creating account...'}</span>
               </div>
             ) : (
               'Sign Up'

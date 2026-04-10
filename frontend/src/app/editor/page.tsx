@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { apiFetch } from "@/lib/api";
+import useSWR from "swr";
 import jsPDF from "jspdf";
 import { Document, Packer, Paragraph, TextRun } from "docx";
 import { saveAs } from "file-saver";
@@ -72,7 +73,12 @@ export default function EditorPage() {
   const user = session?.user;
   const loading = status === "loading";
 
-  const [profile, setProfile] = useState<any>(null);
+  const { data: profileRes, mutate: mutateProfile } = useSWR(
+    user ? "/api/profile" : null,
+    (url) => apiFetch<{ data?: any }>(url),
+    { revalidateOnFocus: false }
+  );
+  const profile = profileRes?.data || null;
   const [currentDoc, setCurrentDoc] = useState<DocumentType | null>(null);
   const [title, setTitle] = useState("Untitled Document");
   const [content, setContent] = useState("");
@@ -113,17 +119,9 @@ export default function EditorPage() {
         return;
       }
 
-      // Load profile from backend API
-      try {
-        const profileRes = await apiFetch<{ data: { coins_balance: number; preferred_mode?: string } }>('/api/profile');
-        if (profileRes?.data) {
-          setProfile(profileRes.data);
-          if (profileRes.data.preferred_mode) {
-            setSelectedMode(profileRes.data.preferred_mode);
-          }
-        }
-      } catch (error) {
-        console.error('Load profile error:', error);
+      // Set initial preferred mode if available
+      if (profile?.preferred_mode) {
+        setSelectedMode(profile.preferred_mode);
       }
 
       loadRecentDocuments();
@@ -506,7 +504,7 @@ export default function EditorPage() {
         return;
       }
 
-      const profileRes = await apiFetch<{ data?: any }>('/api/profile'); if (profileRes?.data) { setProfile(profileRes.data); }
+      mutateProfile(); // Update global SWR profile cache to immediately update coins
 
       const newSuggestion: Suggestion = {
         id: Date.now(),
