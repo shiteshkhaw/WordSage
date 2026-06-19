@@ -5,10 +5,12 @@ import { validateEnv } from "./lib/validate-env.js";
 validateEnv();
 
 import express from "express";
+import http from "http";
 import cors from "cors";
 import helmet from "helmet";
 import compression from "compression";
 import rateLimit from "express-rate-limit";
+import { initSocketIO } from "./lib/socket.js";
 
 import { healthRouter } from "./api/health.js";
 import { authRouter } from "./api/auth.js";
@@ -177,10 +179,15 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
 /* ---------------------------------------------
    START SERVER
 ---------------------------------------------- */
-const server = app.listen(PORT, () => {
+const httpServer = http.createServer(app);
+
+// Attach Socket.io to the same HTTP server (shares port 4000)
+initSocketIO(httpServer);
+
+const server = httpServer.listen(PORT, () => {
    console.log(`🚀 Backend server running on port ${PORT}`);
    console.log(`📍 Health check: http://localhost:${PORT}/api/health`);
-   console.log(`📍 API root: http://localhost:${PORT}/`);
+   console.log(`📍 WebSocket: ws://localhost:${PORT}/presence`);
 });
 
 /* ---------------------------------------------

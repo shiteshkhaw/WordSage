@@ -165,17 +165,58 @@ aiRouter.post('/advanced', requireAuth, async (req: AuthenticatedRequest, res: R
       text,
       { citationStyle }
     );
-    const normalizedResult = normalizeAIResponse(rawResult);
+
+    let resultPayload: any = {};
+    let outputLength = 0;
+
+    if (action === 'plagiarism_check') {
+      const plagiarismResult = rawResult.result;
+      resultPayload = {
+        similarity: plagiarismResult.similarity,
+        isPlagiarized: plagiarismResult.isPlagiarized,
+        sources: plagiarismResult.sources.map((s: any) => ({
+          url: s.url,
+          title: s.title,
+          similarity: s.similarity
+        })),
+        message: plagiarismResult.analysis || 'Plagiarism check completed.'
+      };
+      outputLength = JSON.stringify(plagiarismResult).length;
+    } else {
+      const normalizedResult = normalizeAIResponse(rawResult);
+      const textResult = normalizedResult.result;
+      outputLength = textResult.length;
+
+      if (action === 'rewrite_unique') {
+        resultPayload = {
+          rewritten: textResult,
+          message: 'Text successfully rewritten to be unique!'
+        };
+      } else if (action === 'humanize') {
+        resultPayload = {
+          humanized: textResult,
+          message: 'Text successfully humanized!'
+        };
+      } else if (action === 'bypass_detector') {
+        resultPayload = {
+          bypassed: textResult,
+          message: 'AI detection bypass complete!'
+        };
+      } else if (action === 'generate_citation') {
+        resultPayload = {
+          cited: textResult,
+          message: 'Citation generated successfully!'
+        };
+      }
+    }
 
     const newBalance = profile.coins_balance - coinsRequired;
     const newTotalRequests = (profile.total_ai_requests || 0) + 1;
     const wordCount = text.split(/\s+/).filter(Boolean).length;
     const newWordsProcessed = (profile.words_processed || 0) + wordCount;
 
-    const outputLength = normalizedResult.result?.length || 0;
-
     // Use a single database transaction for post-processing AI logic
-    await prisma.$transaction([
+    const transactionOps: any[] = [
       prisma.user_profiles.update({
         where: { id: req.user.id },
         data: {
@@ -205,11 +246,27 @@ aiRouter.post('/advanced', requireAuth, async (req: AuthenticatedRequest, res: R
           coins_spent: coinsRequired,
         },
       })
-    ]);
+    ];
+
+    if (action === 'plagiarism_check') {
+      transactionOps.push(
+        prisma.plagiarism_checks.create({
+          data: {
+            userId: req.user.id,
+            originalText: text,
+            similarityScore: rawResult.result.similarity,
+            sources: rawResult.result.sources,
+            coinsUsed: coinsRequired,
+          }
+        })
+      );
+    }
+
+    await prisma.$transaction(transactionOps);
 
     res.json({
       success: true,
-      result: normalizedResult.result,
+      result: resultPayload,
       coinsUsed: coinsRequired,
       remainingCoins: newBalance,
     });

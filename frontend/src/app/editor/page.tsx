@@ -15,6 +15,14 @@ import Accordion from "./components/Accordion";
 import FloatingSuggestions from "./components/FloatingSuggestion";
 import FloatingToolbar from "./components/FloatingToolbar";
 import AdvancedPanel from "./components/AdvancedPanel";
+import {
+  getPresenceSocket,
+  joinDocument,
+  leaveDocument,
+  emitCursorUpdate,
+  emitTyping,
+  PresenceUser
+} from "@/lib/socket";
 
 interface DocumentType {
   id: string;
@@ -95,6 +103,7 @@ export default function EditorPage() {
   const [coinsUsed, setCoinsUsed] = useState(0);
   const [recentDocs, setRecentDocs] = useState<DocumentType[]>([]);
   const [showDocList, setShowDocList] = useState(false);
+  const [collaborators, setCollaborators] = useState<PresenceUser[]>([]);
 
   const [isListening, setIsListening] = useState(false);
   const [voiceSupported, setVoiceSupported] = useState(false);
@@ -203,6 +212,57 @@ export default function EditorPage() {
       setForbiddenWordsFound([]);
     }
   }, [content, styleGuide]);
+
+  useEffect(() => {
+    if (!currentDoc?.id || !user) {
+      setCollaborators([]);
+      return;
+    }
+
+    // Connect socket using cookie auth (dummy token is fine as cookie fallback is used)
+    const socket = getPresenceSocket("dummy-token");
+
+    joinDocument(socket, currentDoc.id, selectedTeam || undefined);
+
+    socket.on("presence_updated", (payload: { documentId: string; users: PresenceUser[] }) => {
+      if (payload.documentId === currentDoc.id) {
+        // Filter out the current user
+        setCollaborators(payload.users.filter((u) => u.userId !== user.id));
+      }
+    });
+
+    socket.on("user_typing", (payload: any) => {
+      // Ephemeral typing notifications can be monitored if needed
+    });
+
+    return () => {
+      leaveDocument(socket, currentDoc.id);
+      socket.off("presence_updated");
+      socket.off("user_typing");
+    };
+  }, [currentDoc?.id, user, selectedTeam]);
+
+  const handleTextareaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setContent(e.target.value);
+    
+    const socket = getPresenceSocket("dummy-token");
+    if (currentDoc?.id) {
+      emitCursorUpdate(socket, currentDoc.id, e.target.selectionStart);
+      emitTyping(socket, currentDoc.id, true);
+      
+      if ((window as any).typingTimeout) clearTimeout((window as any).typingTimeout);
+      (window as any).typingTimeout = setTimeout(() => {
+        emitTyping(socket, currentDoc.id, false);
+      }, 2000);
+    }
+  };
+
+  const handleTextareaSelect = (e: React.SyntheticEvent<HTMLTextAreaElement>) => {
+    const socket = getPresenceSocket("dummy-token");
+    if (currentDoc?.id) {
+      emitCursorUpdate(socket, currentDoc.id, e.currentTarget.selectionStart);
+    }
+  };
 
   const loadStyleGuide = async (teamId: string) => {
     try {
@@ -641,6 +701,28 @@ export default function EditorPage() {
               )}
             </div>
             <div className="flex items-center space-x-4">
+              {/* Collaborators online */}
+              {collaborators.length > 0 && (
+                <div className="flex items-center -space-x-2 mr-2">
+                  {collaborators.map((c) => (
+                    <div
+                      key={c.userId}
+                      className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold border-2 border-white cursor-pointer shadow-sm relative group"
+                      style={{ backgroundColor: c.color || '#4ECDC4' }}
+                      title={`${c.userName} (${c.userEmail})`}
+                    >
+                      {c.userName.substring(0, 2).toUpperCase()}
+                      <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-white"></span>
+                      
+                      {/* Tooltip */}
+                      <div className="absolute top-10 left-1/2 transform -translate-x-1/2 bg-slate-900 text-white text-[10px] px-2 py-1 rounded opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity whitespace-nowrap z-50">
+                        {c.userName} is editing
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               <div className="flex items-center space-x-2 px-3 py-2 rounded-lg bg-slate-50">
                 {savedStatus === "saving" && <><div className="animate-spin rounded-full h-4 w-4 border-2 border-indigo-600 border-t-transparent"></div><span className="text-sm text-slate-600 font-medium">Saving...</span></>}
                 {savedStatus === "saved" && <><svg className="w-4 h-4 text-green-600" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg><span className="text-sm text-green-600 font-medium">Saved</span></>}
@@ -782,7 +864,14 @@ export default function EditorPage() {
 
         {/* Editor Area */}
         <div className="flex-1 overflow-auto bg-white">
-          <textarea value={content} onChange={(e) => setContent(e.target.value)} placeholder="Start typing or use voice input... AI will optimize for your selected mode." className="w-full h-full p-12 text-lg leading-relaxed font-medium text-slate-900 placeholder:text-slate-400 resize-none focus:outline-none border-none" style={{ minHeight: "calc(100vh - 350px)" }} />
+          <textarea
+            value={content}
+            onChange={handleTextareaChange}
+            onSelect={handleTextareaSelect}
+            placeholder="Start typing or use voice input... AI will optimize for your selected mode."
+            className="w-full h-full p-12 text-lg leading-relaxed font-medium text-slate-900 placeholder:text-slate-400 resize-none focus:outline-none border-none"
+            style={{ minHeight: "calc(100vh - 350px)" }}
+          />
         </div>
 
         {/* Status Bar */}

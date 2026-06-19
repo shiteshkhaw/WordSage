@@ -219,18 +219,18 @@ model sessions {
 }
 
 model subscriptions {
-  id                     String    @id @default(uuid())
-  user_id                String    @unique
-  stripe_subscription_id String?   @unique
-  stripe_customer_id     String?   @unique
-  status                 String    @default("inactive")
-  plan_name              String    @default("free")
-  current_period_start   DateTime?
-  current_period_end     DateTime?
-  cancel_at_period_end   Boolean   @default(false)
-  created_at             DateTime  @default(now())
-  updated_at             DateTime  @default(now())
-  users                  users     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  id                       String    @id @default(uuid())
+  user_id                  String    @unique
+  razorpay_subscription_id String?   @unique
+  razorpay_customer_id     String?   @unique
+  status                   String    @default("inactive")
+  plan_name                String    @default("free")
+  current_period_start     DateTime?
+  current_period_end       DateTime?
+  cancel_at_period_end     Boolean   @default(false)
+  created_at               DateTime  @default(now())
+  updated_at               DateTime  @default(now())
+  users                    users     @relation(fields: [user_id], references: [id], onDelete: Cascade)
 }
 
 model team_content_library {
@@ -289,6 +289,7 @@ model teams {
   team_content_library team_content_library[]
   team_members         team_members[]
   team_style_guides    team_style_guides[]
+  team_templates       team_templates[]
   owner                users                  @relation(fields: [owner_id], references: [id], onDelete: Cascade)
 }
 
@@ -331,7 +332,6 @@ model users {
   full_name                                                    String?
   avatar_url                                                   String?
   subscription_tier                                            String                 @default("free")
-  coin_balance                                                 Int                    @default(100)
   onboarding_completed                                         Boolean                @default(false)
   preferences                                                  Json                   @default("{}")
   created_at                                                   DateTime               @default(now())
@@ -354,6 +354,7 @@ model users {
   transactions                                                 transactions[]
   notifications                                                notifications[]
   user_profiles                                                user_profiles?
+  team_templates                                               team_templates[]
 }
 
 model verification_tokens {
@@ -374,4 +375,48 @@ model password_reset_tokens {
 
   @@index([email])
   @@index([token])
+}
+
+model templates {
+  id             String           @id @default(uuid())
+  name           String
+  category       String
+  mode           String           @default("general")
+  icon           String           @default("📝")
+  description    String
+  ai_prompt      String
+  variables      Json             @default("[]")
+  sections       Json             @default("[]")
+  is_default     Boolean          @default(true)
+  usage_count    Int              @default(0)
+  created_at     DateTime         @default(now())
+  updated_at     DateTime         @default(now())
+  team_templates team_templates[]
+
+  @@index([category])
+  @@index([mode])
+}
+
+model team_templates {
+  id            String    @id @default(uuid())
+  team_id       String
+  created_by    String
+  name          String
+  category      String
+  mode          String    @default("general")
+  icon          String    @default("📝")
+  description   String
+  ai_prompt     String
+  variables     Json      @default("[]")
+  sections      Json      @default("[]")
+  usage_count   Int       @default(0)
+  base_template String?
+  created_at    DateTime  @default(now())
+  updated_at    DateTime  @default(now())
+  team          teams     @relation(fields: [team_id], references: [id], onDelete: Cascade)
+  creator       users     @relation(fields: [created_by], references: [id], onDelete: Cascade)
+  source        templates? @relation(fields: [base_template], references: [id])
+
+  @@index([team_id])
+  @@index([category])
 }

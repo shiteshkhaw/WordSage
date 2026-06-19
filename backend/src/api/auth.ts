@@ -88,7 +88,6 @@ authRouter.post('/oauth', async (req: Request, res: Response) => {
           full_name: name || email.split('@')[0],
           avatar_url: image || null,
           subscription_tier: 'free',
-          coin_balance: 0,
           onboarding_completed: false,
           preferences: {},
           user_profiles: {
@@ -166,7 +165,6 @@ authRouter.post('/signup', async (req, res: Response) => {
         email,
         password: hashedPassword,
         full_name: fullName,
-        coin_balance: 100,
         user_profiles: {
           create: {
             coins_balance: 100,

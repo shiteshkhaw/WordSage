@@ -1,454 +1,361 @@
-import { Router, Request, Response } from 'express';
+import { Router, Response } from 'express';
+import { requireAuth, AuthenticatedRequest } from '../middleware/auth.js';
+import prisma from '../lib/prisma.js';
 
 export const templatesRouter = Router();
 
-/**
- * ENHANCED TEMPLATES - 30+ Professional Templates
- * 
- * Each template includes:
- * - AI prompt: Specific instructions for AI-assisted content generation
- * - Variables: Dynamic placeholders for customization
- * - Example output: Reference for expected quality
- */
-const TEMPLATES = [
-    // ========================================
-    // 📧 EMAIL TEMPLATES
-    // ========================================
-    {
-        id: 'email-professional',
-        name: 'Professional Email',
-        category: 'email',
-        mode: 'business',
-        icon: '📧',
-        description: 'A well-structured professional email for business communication',
+// Helper to format templates back to the schema format expected by the frontend client
+function formatTemplate(t: any) {
+    return {
+        id: t.id,
+        name: t.name,
+        category: t.category,
+        mode: t.mode,
+        icon: t.icon,
+        description: t.description,
         structure: {
-            sections: ['Subject Line', 'Greeting', 'Purpose', 'Details', 'Call to Action', 'Closing', 'Signature'],
+            sections: Array.isArray(t.sections) ? t.sections : []
         },
-        aiPrompt: 'Write a clear, concise professional email. Use a direct subject line, open with context, state the purpose early, include specific details, and end with a clear call to action.',
-        variables: ['{{recipient_name}}', '{{sender_name}}', '{{company}}', '{{purpose}}'],
-    },
-    {
-        id: 'email-cold-outreach',
-        name: 'Cold Outreach Email',
-        category: 'email',
-        mode: 'marketing',
-        icon: '🎯',
-        description: 'Compelling cold email that gets responses',
-        structure: {
-            sections: ['Attention-Grabbing Subject', 'Personal Hook', 'Value Proposition', 'Social Proof', 'Soft CTA', 'Signature'],
-        },
-        aiPrompt: 'Write a personalized cold email that grabs attention, demonstrates value quickly, includes relevant social proof, and ends with a low-commitment call to action. Keep it under 150 words.',
-        variables: ['{{prospect_name}}', '{{company}}', '{{pain_point}}', '{{solution}}'],
-    },
-    {
-        id: 'email-follow-up',
-        name: 'Follow-up Email',
-        category: 'email',
-        mode: 'business',
-        icon: '🔄',
-        description: 'Effective follow-up that gets responses',
-        structure: {
-            sections: ['Reference Previous Contact', 'Added Value', 'Reminder of Ask', 'Easy Next Step'],
-        },
-        aiPrompt: 'Write a polite but persistent follow-up email. Reference the previous conversation, add new value or perspective, and make responding easy.',
-        variables: ['{{recipient}}', '{{previous_topic}}', '{{time_since}}'],
-    },
+        aiPrompt: t.ai_prompt,
+        variables: Array.isArray(t.variables) ? t.variables : [],
+        usage_count: t.usage_count,
+        created_at: t.created_at,
+        updated_at: t.updated_at,
+    };
+}
 
-    // ========================================
-    // 📝 CONTENT TEMPLATES
-    // ========================================
-    {
-        id: 'blog-post',
-        name: 'Blog Post',
-        category: 'content',
-        mode: 'creative',
-        icon: '📝',
-        description: 'Engaging blog post with SEO-friendly structure',
-        structure: {
-            sections: ['Title (H1)', 'Hook/Introduction', 'Main Points (H2s)', 'Examples', 'Conclusion', 'Call to Action'],
-        },
-        aiPrompt: 'Write an engaging, value-packed blog post. Start with a hook that addresses the reader\'s pain point, deliver actionable insights, use subheadings for scannability, and end with a memorable conclusion.',
-        variables: ['{{topic}}', '{{target_keyword}}', '{{audience}}', '{{word_count}}'],
-    },
-    {
-        id: 'linkedin-article',
-        name: 'LinkedIn Article',
-        category: 'content',
-        mode: 'business',
-        icon: '💼',
-        description: 'Thought leadership article for LinkedIn',
-        structure: {
-            sections: ['Attention-Grabbing Title', 'Personal Story/Hook', 'Key Insight', 'Supporting Points', 'Actionable Takeaways', 'Engagement Question'],
-        },
-        aiPrompt: 'Write a LinkedIn article that positions the author as a thought leader. Include personal experience, actionable insights, and end with a question to drive engagement.',
-        variables: ['{{topic}}', '{{author_expertise}}', '{{industry}}'],
-    },
-    {
-        id: 'how-to-guide',
-        name: 'How-To Guide',
-        category: 'content',
-        mode: 'education',
-        icon: '📚',
-        description: 'Step-by-step tutorial or guide',
-        structure: {
-            sections: ['What You\'ll Learn', 'Prerequisites', 'Step 1', 'Step 2', 'Step 3', 'Pro Tips', 'Troubleshooting', 'Next Steps'],
-        },
-        aiPrompt: 'Write a comprehensive how-to guide with numbered steps, clear explanations, helpful tips, and common troubleshooting solutions. Use simple language that beginners can follow.',
-        variables: ['{{skill}}', '{{difficulty_level}}', '{{time_required}}'],
-    },
+// GET /api/templates - Get all default and/or team templates
+templatesRouter.get('/', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        const { category, mode, teamId } = req.query;
 
-    // ========================================
-    // 💼 BUSINESS TEMPLATES
-    // ========================================
-    {
-        id: 'meeting-notes',
-        name: 'Meeting Notes',
-        category: 'business',
-        mode: 'business',
-        icon: '📋',
-        description: 'Organized meeting notes with action items',
-        structure: {
-            sections: ['Meeting Title & Date', 'Attendees', 'Agenda', 'Discussion Points', 'Decisions Made', 'Action Items (Owner + Deadline)', 'Next Meeting'],
-        },
-        aiPrompt: 'Organize meeting notes clearly with actionable items. Each action item should have an owner and deadline. Keep language concise and professional.',
-        variables: ['{{meeting_type}}', '{{date}}', '{{attendees}}'],
-    },
-    {
-        id: 'executive-summary',
-        name: 'Executive Summary',
-        category: 'business',
-        mode: 'business',
-        icon: '📊',
-        description: 'Concise summary for busy executives',
-        structure: {
-            sections: ['Situation/Context', 'Key Findings', 'Recommendation', 'Impact/ROI', 'Next Steps', 'Timeline'],
-        },
-        aiPrompt: 'Write a concise executive summary using BLUF (Bottom Line Up Front). Lead with the recommendation, support with key data, and end with clear next steps. Keep it under 500 words.',
-        variables: ['{{project}}', '{{stakeholders}}', '{{decision_type}}'],
-    },
-    {
-        id: 'project-proposal',
-        name: 'Project Proposal',
-        category: 'business',
-        mode: 'business',
-        icon: '📑',
-        description: 'Comprehensive project proposal',
-        structure: {
-            sections: ['Executive Summary', 'Problem Statement', 'Proposed Solution', 'Scope & Deliverables', 'Timeline', 'Budget', 'Team', 'Risk Assessment', 'Success Metrics'],
-        },
-        aiPrompt: 'Write a persuasive project proposal that clearly defines the problem, presents a compelling solution, includes realistic timelines and budgets, and addresses potential concerns.',
-        variables: ['{{project_name}}', '{{client}}', '{{budget_range}}', '{{duration}}'],
-    },
-    {
-        id: 'case-study',
-        name: 'Case Study',
-        category: 'business',
-        mode: 'marketing',
-        icon: '📊',
-        description: 'Compelling customer success story',
-        structure: {
-            sections: ['Client Overview', 'Challenge', 'Solution', 'Implementation', 'Results (with metrics)', 'Client Testimonial', 'Key Takeaways'],
-        },
-        aiPrompt: 'Write a compelling case study that follows the Challenge-Solution-Results framework. Include specific metrics, quote the client, and make the success story relatable.',
-        variables: ['{{client_name}}', '{{industry}}', '{{key_metric}}', '{{timeframe}}'],
-    },
+        // Where clause for default templates
+        const whereClause: any = {
+            is_default: true,
+        };
 
-    // ========================================
-    // 📢 MARKETING TEMPLATES
-    // ========================================
-    {
-        id: 'product-description',
-        name: 'Product Description',
-        category: 'marketing',
-        mode: 'ecommerce',
-        icon: '🛍️',
-        description: 'Converting product description',
-        structure: {
-            sections: ['Headline', 'Value Proposition', 'Key Benefits (bullets)', 'Features', 'Social Proof', 'Call to Action'],
-        },
-        aiPrompt: 'Write a compelling product description that leads with benefits, uses sensory language, addresses objections, and creates desire. Focus on how the product improves the customer\'s life.',
-        variables: ['{{product_name}}', '{{target_customer}}', '{{price_point}}', '{{key_feature}}'],
-    },
-    {
-        id: 'landing-page',
-        name: 'Landing Page Copy',
-        category: 'marketing',
-        mode: 'marketing',
-        icon: '🖥️',
-        description: 'High-converting landing page copy',
-        structure: {
-            sections: ['Headline', 'Subheadline', 'Hero Section', 'Problem/Pain Points', 'Solution', 'Benefits', 'Social Proof', 'FAQ', 'CTA'],
-        },
-        aiPrompt: 'Write landing page copy that grabs attention immediately, addresses the visitor\'s pain points, presents the solution compellingly, and guides toward a single clear action.',
-        variables: ['{{product}}', '{{target_audience}}', '{{primary_cta}}', '{{objections}}'],
-    },
-    {
-        id: 'ad-copy',
-        name: 'Ad Copy (PPC/Social)',
-        category: 'marketing',
-        mode: 'marketing',
-        icon: '📣',
-        description: 'Attention-grabbing ad copy',
-        structure: {
-            sections: ['Headline (Attention)', 'Body (Interest + Desire)', 'CTA (Action)', 'Ad variations'],
-        },
-        aiPrompt: 'Write scroll-stopping ad copy using AIDA framework. Create multiple variations with different angles. Keep headlines under 30 characters and body under 90 for mobile optimization.',
-        variables: ['{{product}}', '{{platform}}', '{{audience}}', '{{offer}}'],
-    },
-    {
-        id: 'press-release',
-        name: 'Press Release',
-        category: 'marketing',
-        mode: 'journalism',
-        icon: '📰',
-        description: 'Standard press release format',
-        structure: {
-            sections: ['Headline', 'Dateline', 'Lead Paragraph', 'Body', 'Quotes', 'Boilerplate', 'Media Contact'],
-        },
-        aiPrompt: 'Write a news-worthy press release in AP style. Lead with the most important information, include quotable quotes, and make it easy for journalists to cover.',
-        variables: ['{{announcement}}', '{{company}}', '{{spokesperson}}', '{{date}}'],
-    },
+        if (category) {
+            whereClause.category = category as string;
+        }
 
-    // ========================================
-    // 📱 SOCIAL MEDIA TEMPLATES
-    // ========================================
-    {
-        id: 'social-media',
-        name: 'Social Media Post',
-        category: 'social',
-        mode: 'social_media',
-        icon: '📱',
-        description: 'Engaging social media post',
-        structure: {
-            sections: ['Hook (First Line)', 'Value/Story', 'Engagement Prompt', 'Hashtags'],
-        },
-        aiPrompt: 'Write a thumb-stopping social post. Start with a powerful hook, deliver value or tell a story, and encourage engagement. Include relevant hashtags.',
-        variables: ['{{platform}}', '{{topic}}', '{{tone}}', '{{cta}}'],
-    },
-    {
-        id: 'twitter-thread',
-        name: 'Twitter/X Thread',
-        category: 'social',
-        mode: 'social_media',
-        icon: '🧵',
-        description: 'Viral Twitter thread structure',
-        structure: {
-            sections: ['Hook Tweet', 'Context', 'Main Points (3-7 tweets)', 'Key Insight', 'Takeaway/CTA', 'Retweet Request'],
-        },
-        aiPrompt: 'Write a viral Twitter thread. Start with an irresistible hook, deliver insights in digestible tweets, use line breaks for readability, and end with a clear takeaway. Number the tweets.',
-        variables: ['{{topic}}', '{{expertise}}', '{{audience}}'],
-    },
-    {
-        id: 'linkedin-post',
-        name: 'LinkedIn Post',
-        category: 'social',
-        mode: 'business',
-        icon: '💼',
-        description: 'Engaging LinkedIn post',
-        structure: {
-            sections: ['Hook', 'Story/Insight', 'Lesson', 'Engagement Question'],
-        },
-        aiPrompt: 'Write a LinkedIn post that tells a story or shares an insight. Use short paragraphs, line breaks for readability, and end with a thought-provoking question. Keep authentic and professional.',
-        variables: ['{{topic}}', '{{personal_experience}}', '{{industry}}'],
-    },
+        if (mode) {
+            whereClause.mode = mode as string;
+        }
 
-    // ========================================
-    // 🎓 ACADEMIC TEMPLATES
-    // ========================================
-    {
-        id: 'research-summary',
-        name: 'Research Summary',
-        category: 'academic',
-        mode: 'academic',
-        icon: '🔬',
-        description: 'Structured research summary',
-        structure: {
-            sections: ['Abstract', 'Background', 'Methodology', 'Key Findings', 'Analysis', 'Conclusions', 'References'],
-        },
-        aiPrompt: 'Write an objective research summary using academic language. Present methodology clearly, support findings with evidence, and distinguish between facts and interpretation.',
-        variables: ['{{research_topic}}', '{{field}}', '{{methodology}}'],
-    },
-    {
-        id: 'thesis-statement',
-        name: 'Thesis Statement',
-        category: 'academic',
-        mode: 'academic',
-        icon: '📜',
-        description: 'Strong thesis statement',
-        structure: {
-            sections: ['Topic', 'Position/Argument', 'Main Supporting Points', 'Significance'],
-        },
-        aiPrompt: 'Craft a clear, arguable thesis statement that takes a position, outlines the main points, and indicates the significance of the argument.',
-        variables: ['{{topic}}', '{{discipline}}', '{{scope}}'],
-    },
+        // Fetch default templates
+        const defaultTemplates = await prisma.templates.findMany({
+            where: whereClause,
+            orderBy: { name: 'asc' },
+        });
 
-    // ========================================
-    // ⚙️ TECHNICAL TEMPLATES
-    // ========================================
-    {
-        id: 'api-documentation',
-        name: 'API Documentation',
-        category: 'technical',
-        mode: 'technical',
-        icon: '🔧',
-        description: 'Clear API endpoint documentation',
-        structure: {
-            sections: ['Endpoint', 'Description', 'Authentication', 'Parameters', 'Request Example', 'Response Example', 'Error Codes', 'Rate Limits'],
-        },
-        aiPrompt: 'Write clear API documentation. Include all parameters, provide working examples, document error responses, and use consistent formatting.',
-        variables: ['{{endpoint}}', '{{method}}', '{{auth_type}}'],
-    },
-    {
-        id: 'readme',
-        name: 'README.md',
-        category: 'technical',
-        mode: 'technical',
-        icon: '📖',
-        description: 'Project README file',
-        structure: {
-            sections: ['Project Title', 'Description', 'Installation', 'Usage', 'Configuration', 'Contributing', 'License'],
-        },
-        aiPrompt: 'Write a comprehensive README that helps developers get started quickly. Include clear installation steps, usage examples, and contribution guidelines.',
-        variables: ['{{project_name}}', '{{language}}', '{{license}}'],
-    },
-    {
-        id: 'release-notes',
-        name: 'Release Notes',
-        category: 'technical',
-        mode: 'technical',
-        icon: '🚀',
-        description: 'Version release notes',
-        structure: {
-            sections: ['Version Number', 'Release Date', 'Highlights', 'New Features', 'Improvements', 'Bug Fixes', 'Breaking Changes', 'Migration Guide'],
-        },
-        aiPrompt: 'Write clear release notes that highlight what\'s new, list bug fixes, and clearly communicate any breaking changes with migration steps.',
-        variables: ['{{version}}', '{{product}}', '{{date}}'],
-    },
+        // If teamId is specified, fetch team templates too
+        let teamTemplates: any[] = [];
+        if (teamId) {
+            // Verify user has access to the team
+            const teamAccess = await prisma.teams.findFirst({
+                where: {
+                    id: teamId as string,
+                    OR: [
+                        { owner_id: req.user!.id },
+                        { team_members: { some: { user_id: req.user!.id, status: 'active' } } }
+                    ]
+                }
+            });
 
-    // ========================================
-    // ⚖️ LEGAL TEMPLATES
-    // ========================================
-    {
-        id: 'terms-of-service',
-        name: 'Terms of Service',
-        category: 'legal',
-        mode: 'legal',
-        icon: '📜',
-        description: 'Website/App Terms of Service',
-        structure: {
-            sections: ['Introduction', 'Definitions', 'User Obligations', 'Service Description', 'Intellectual Property', 'Limitation of Liability', 'Termination', 'Governing Law'],
-        },
-        aiPrompt: 'Write clear Terms of Service using plain language where possible while maintaining legal precision. Define key terms, specify user obligations, and limit liability appropriately.',
-        variables: ['{{company}}', '{{service}}', '{{jurisdiction}}'],
-    },
-    {
-        id: 'privacy-policy',
-        name: 'Privacy Policy',
-        category: 'legal',
-        mode: 'legal',
-        icon: '🔒',
-        description: 'GDPR/CCPA compliant privacy policy',
-        structure: {
-            sections: ['Data We Collect', 'How We Use Data', 'Data Sharing', 'Your Rights', 'Data Retention', 'Security', 'Cookies', 'Contact Information'],
-        },
-        aiPrompt: 'Write a comprehensive privacy policy that complies with GDPR and CCPA. Be transparent about data collection, clearly explain user rights, and use accessible language.',
-        variables: ['{{company}}', '{{website}}', '{{data_types}}'],
-    },
+            if (teamAccess) {
+                const teamWhereClause: any = { team_id: teamId as string };
+                if (category) teamWhereClause.category = category as string;
+                if (mode) teamWhereClause.mode = mode as string;
 
-    // ========================================
-    // 👥 HR TEMPLATES
-    // ========================================
-    {
-        id: 'job-description',
-        name: 'Job Description',
-        category: 'hr',
-        mode: 'hr_recruitment',
-        icon: '💼',
-        description: 'Inclusive job description',
-        structure: {
-            sections: ['Job Title', 'About Company', 'Role Overview', 'Responsibilities', 'Requirements', 'Nice-to-Haves', 'Benefits', 'Application Process'],
-        },
-        aiPrompt: 'Write an inclusive job description that focuses on skills and outcomes. Avoid gendered language, separate requirements from preferences, and highlight culture and growth opportunities.',
-        variables: ['{{job_title}}', '{{department}}', '{{location}}', '{{experience_level}}'],
-    },
-    {
-        id: 'performance-review',
-        name: 'Performance Review',
-        category: 'hr',
-        mode: 'hr_recruitment',
-        icon: '📈',
-        description: 'Constructive performance review',
-        structure: {
-            sections: ['Summary', 'Key Achievements', 'Strengths', 'Areas for Development', 'Goals for Next Period', 'Support Needed', 'Overall Rating'],
-        },
-        aiPrompt: 'Write a balanced performance review. Be specific with examples, focus on behaviors not personality, frame development areas constructively, and set SMART goals.',
-        variables: ['{{employee_name}}', '{{role}}', '{{review_period}}'],
-    },
+                teamTemplates = await prisma.team_templates.findMany({
+                    where: teamWhereClause,
+                    orderBy: { name: 'asc' },
+                });
+            }
+        }
 
-    // ========================================
-    // 🏠 REAL ESTATE TEMPLATES
-    // ========================================
-    {
-        id: 'property-listing',
-        name: 'Property Listing',
-        category: 'real_estate',
-        mode: 'real_estate',
-        icon: '🏠',
-        description: 'Compelling property listing',
-        structure: {
-            sections: ['Headline', 'Property Overview', 'Key Features', 'Room Details', 'Location Benefits', 'Community', 'Price/Terms', 'Contact'],
-        },
-        aiPrompt: 'Write an evocative property listing that helps buyers visualize living there. Lead with the most compelling feature, use sensory language, and highlight lifestyle benefits.',
-        variables: ['{{property_type}}', '{{location}}', '{{bedrooms}}', '{{price}}'],
-    },
+        // Map and combine lists
+        const formattedDefaults = defaultTemplates.map((t: any) => ({ ...formatTemplate(t), type: 'default' }));
+        const formattedTeam = teamTemplates.map((t: any) => ({ ...formatTemplate(t), type: 'team' }));
 
-    // ========================================
-    // ✈️ TRAVEL TEMPLATES
-    // ========================================
-    {
-        id: 'destination-guide',
-        name: 'Destination Guide',
-        category: 'travel',
-        mode: 'travel',
-        icon: '✈️',
-        description: 'Comprehensive travel destination guide',
-        structure: {
-            sections: ['Introduction', 'Best Time to Visit', 'Getting There', 'Things to Do', 'Where to Stay', 'Food & Dining', 'Local Tips', 'Budget Guide'],
-        },
-        aiPrompt: 'Write an inspiring yet practical destination guide. Transport readers with vivid descriptions, provide insider tips, and include essential logistical information.',
-        variables: ['{{destination}}', '{{trip_type}}', '{{duration}}'],
-    },
-];
-
-// GET /api/templates - Get all templates
-templatesRouter.get('/', (req: Request, res: Response) => {
-    const { category, mode } = req.query;
-
-    let filteredTemplates = TEMPLATES;
-
-    if (category) {
-        filteredTemplates = filteredTemplates.filter(t => t.category === category);
+        res.json({
+            data: [...formattedDefaults, ...formattedTeam]
+        });
+    } catch (error: any) {
+        console.error('Error fetching templates:', error);
+        res.status(500).json({ error: 'Failed to fetch templates' });
     }
+});
 
-    if (mode) {
-        filteredTemplates = filteredTemplates.filter(t => t.mode === mode);
+// GET /api/templates/meta/categories - Get all distinct categories
+templatesRouter.get('/meta/categories', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        const categories = await prisma.templates.findMany({
+            select: { category: true },
+            distinct: ['category'],
+        });
+        res.json({ data: categories.map((c: any) => c.category) });
+    } catch (error: any) {
+        console.error('Error fetching categories:', error);
+        res.status(500).json({ error: 'Failed to fetch categories' });
     }
-
-    res.json({ data: filteredTemplates });
 });
 
 // GET /api/templates/:id - Get single template
-templatesRouter.get('/:id', (req: Request, res: Response) => {
-    const template = TEMPLATES.find(t => t.id === req.params.id);
-    if (!template) {
-        return res.status(404).json({ error: 'Template not found' });
+templatesRouter.get('/:id', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        const { id } = req.params;
+
+        // Try default template first
+        const defaultTemplate = await prisma.templates.findUnique({
+            where: { id },
+        });
+
+        if (defaultTemplate) {
+            return res.json({ data: { ...formatTemplate(defaultTemplate), type: 'default' } });
+        }
+
+        // Check team templates
+        const teamTemplate = await prisma.team_templates.findUnique({
+            where: { id },
+        });
+
+        if (teamTemplate) {
+            // Verify user has access to this team
+            const teamAccess = await prisma.teams.findFirst({
+                where: {
+                    id: teamTemplate.team_id,
+                    OR: [
+                        { owner_id: req.user!.id },
+                        { team_members: { some: { user_id: req.user!.id, status: 'active' } } }
+                    ]
+                }
+            });
+
+            if (!teamAccess) {
+                return res.status(403).json({ error: 'You do not have access to this team template' });
+            }
+
+            return res.json({ data: { ...formatTemplate(teamTemplate), type: 'team' } });
+        }
+
+        res.status(404).json({ error: 'Template not found' });
+    } catch (error: any) {
+        console.error('Error fetching template:', error);
+        res.status(500).json({ error: 'Failed to fetch template' });
     }
-    res.json({ data: template });
 });
 
-// GET /api/templates/categories - Get all categories
-templatesRouter.get('/meta/categories', (req: Request, res: Response) => {
-    const categories = [...new Set(TEMPLATES.map(t => t.category))];
-    res.json({ data: categories });
+// POST /api/templates/:id/use - Increment usage count when selected
+templatesRouter.post('/:id/use', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        const { id } = req.params;
+
+        // Try default template first
+        const defaultTemplate = await prisma.templates.findUnique({
+            where: { id },
+        });
+
+        if (defaultTemplate) {
+            await prisma.templates.update({
+                where: { id },
+                data: { usage_count: { increment: 1 } },
+            });
+            return res.json({ success: true });
+        }
+
+        // Try team template
+        const teamTemplate = await prisma.team_templates.findUnique({
+            where: { id },
+        });
+
+        if (teamTemplate) {
+            await prisma.team_templates.update({
+                where: { id },
+                data: { usage_count: { increment: 1 } },
+            });
+            return res.json({ success: true });
+        }
+
+        res.status(404).json({ error: 'Template not found' });
+    } catch (error: any) {
+        console.error('Error tracking template usage:', error);
+        res.status(500).json({ error: 'Failed to track template usage' });
+    }
 });
 
+// ========================================
+// 👥 TEAM TEMPLATES ENDPOINTS (CRUD)
+// ========================================
+
+// GET /api/templates/team/:teamId - Get templates for specific team
+templatesRouter.get('/team/:teamId', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        const { teamId } = req.params;
+
+        // Verify team access
+        const teamAccess = await prisma.teams.findFirst({
+            where: {
+                id: teamId,
+                OR: [
+                    { owner_id: req.user!.id },
+                    { team_members: { some: { user_id: req.user!.id, status: 'active' } } }
+                ]
+            }
+        });
+
+        if (!teamAccess) {
+            return res.status(403).json({ error: 'You do not have access to this team' });
+        }
+
+        const teamTemplates = await prisma.team_templates.findMany({
+            where: { team_id: teamId },
+            orderBy: { name: 'asc' },
+        });
+
+        res.json({ data: teamTemplates.map((t: any) => formatTemplate(t)) });
+    } catch (error: any) {
+        console.error('Error fetching team templates:', error);
+        res.status(500).json({ error: 'Failed to fetch team templates' });
+    }
+});
+
+// POST /api/templates/team/:teamId - Create new team template
+templatesRouter.post('/team/:teamId', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        const { teamId } = req.params;
+        const { name, category, mode, icon, description, ai_prompt, variables, sections, base_template } = req.body;
+
+        if (!name || !ai_prompt) {
+            return res.status(400).json({ error: 'Name and AI prompt are required' });
+        }
+
+        // Verify team access
+        const teamAccess = await prisma.teams.findFirst({
+            where: {
+                id: teamId,
+                OR: [
+                    { owner_id: req.user!.id },
+                    { team_members: { some: { user_id: req.user!.id, status: 'active' } } }
+                ]
+            }
+        });
+
+        if (!teamAccess) {
+            return res.status(403).json({ error: 'You do not have access to this team' });
+        }
+
+        const newTeamTemplate = await prisma.team_templates.create({
+            data: {
+                team_id: teamId,
+                created_by: req.user!.id,
+                name,
+                category: category || 'general',
+                mode: mode || 'general',
+                icon: icon || '📝',
+                description: description || '',
+                ai_prompt,
+                variables: variables || [],
+                sections: sections || [],
+                base_template: base_template || null,
+            }
+        });
+
+        res.status(201).json({ data: formatTemplate(newTeamTemplate) });
+    } catch (error: any) {
+        console.error('Error creating team template:', error);
+        res.status(500).json({ error: 'Failed to create team template' });
+    }
+});
+
+// PUT /api/templates/team/:teamId/:templateId - Update team template
+templatesRouter.put('/team/:teamId/:templateId', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        const { teamId, templateId } = req.params;
+        const { name, category, mode, icon, description, ai_prompt, variables, sections } = req.body;
+
+        // Verify template belongs to team
+        const template = await prisma.team_templates.findFirst({
+            where: { id: templateId, team_id: teamId },
+        });
+
+        if (!template) {
+            return res.status(404).json({ error: 'Team template not found' });
+        }
+
+        // Verify team access
+        const teamAccess = await prisma.teams.findFirst({
+            where: {
+                id: teamId,
+                OR: [
+                    { owner_id: req.user!.id },
+                    { team_members: { some: { user_id: req.user!.id, status: 'active' } } }
+                ]
+            }
+        });
+
+        if (!teamAccess) {
+            return res.status(403).json({ error: 'You do not have access to this team' });
+        }
+
+        const updatedTemplate = await prisma.team_templates.update({
+            where: { id: templateId },
+            data: {
+                name: name || undefined,
+                category: category || undefined,
+                mode: mode || undefined,
+                icon: icon || undefined,
+                description: description || undefined,
+                ai_prompt: ai_prompt || undefined,
+                variables: variables || undefined,
+                sections: sections || undefined,
+                updated_at: new Date(),
+            }
+        });
+
+        res.json({ data: formatTemplate(updatedTemplate) });
+    } catch (error: any) {
+        console.error('Error updating team template:', error);
+        res.status(500).json({ error: 'Failed to update team template' });
+    }
+});
+
+// DELETE /api/templates/team/:teamId/:templateId - Delete team template
+templatesRouter.delete('/team/:teamId/:templateId', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        const { teamId, templateId } = req.params;
+
+        // Verify template belongs to team
+        const template = await prisma.team_templates.findFirst({
+            where: { id: templateId, team_id: teamId },
+        });
+
+        if (!template) {
+            return res.status(404).json({ error: 'Team template not found' });
+        }
+
+        // Verify team access
+        const teamAccess = await prisma.teams.findFirst({
+            where: {
+                id: teamId,
+                OR: [
+                    { owner_id: req.user!.id },
+                    { team_members: { some: { user_id: req.user!.id, status: 'active' } } }
+                ]
+            }
+        });
+
+        if (!teamAccess) {
+            return res.status(403).json({ error: 'You do not have access to this team' });
+        }
+
+        await prisma.team_templates.delete({
+            where: { id: templateId },
+        });
+
+        res.json({ success: true, message: 'Team template deleted' });
+    } catch (error: any) {
+        console.error('Error deleting team template:', error);
+        res.status(500).json({ error: 'Failed to delete team template' });
+    }
+});
