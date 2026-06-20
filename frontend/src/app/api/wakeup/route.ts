@@ -12,7 +12,8 @@ export async function GET() {
       const pUrl = process.env.NEXT_PUBLIC_API_URL;
       if (process.env.VERCEL) {
         if (bUrl && !isLocalUrl(bUrl)) return bUrl;
-        return pUrl || '';
+        if (pUrl && !isLocalUrl(pUrl)) return pUrl;
+        return 'https://wordsage-l10x.onrender.com';
       }
       return bUrl || pUrl || 'http://localhost:4000';
     };

@@ -25,7 +25,10 @@ export async function POST(req: Request) {
                 if (bUrl && !isLocalUrl(bUrl)) {
                     return bUrl;
                 }
-                return pUrl || '';
+                if (pUrl && !isLocalUrl(pUrl)) {
+                    return pUrl;
+                }
+                return 'https://wordsage-l10x.onrender.com';
             }
             return bUrl || pUrl || 'http://localhost:4000';
         };

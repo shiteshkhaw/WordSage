@@ -21,7 +21,10 @@ const getApiUrl = () => {
         if (backendUrl && !isLocalUrl(backendUrl)) {
             return backendUrl;
         }
-        return publicUrl || '';
+        if (publicUrl && !isLocalUrl(publicUrl)) {
+            return publicUrl;
+        }
+        return 'https://wordsage-l10x.onrender.com';
     }
     return backendUrl || publicUrl || 'http://localhost:4000';
 };
