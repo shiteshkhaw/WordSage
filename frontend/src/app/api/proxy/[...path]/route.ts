@@ -16,8 +16,24 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 
-// Server-side backend URL (never exposed to the browser)
-const BACKEND_URL = process.env.BACKEND_URL;
+const isLocalUrl = (url?: string) => {
+    if (!url) return true;
+    return url.includes('localhost') || url.includes('127.0.0.1') || url.includes('wordsage-backend');
+};
+
+const getBackendUrl = () => {
+    const backendUrl = process.env.BACKEND_URL;
+    const publicUrl = process.env.NEXT_PUBLIC_API_URL;
+    if (process.env.VERCEL) {
+        if (backendUrl && !isLocalUrl(backendUrl)) {
+            return backendUrl;
+        }
+        return publicUrl || '';
+    }
+    return backendUrl || publicUrl || 'http://localhost:4000';
+};
+
+const BACKEND_URL = getBackendUrl();
 
 // Headers that must NOT be forwarded upstream (request)
 const SKIP_REQUEST_HEADERS = new Set([
@@ -65,9 +81,9 @@ async function proxyRequest(
 ): Promise<NextResponse> {
     // --- Guard: BACKEND_URL must be set ---
     if (!BACKEND_URL) {
-        console.error('[proxy] ❌ BACKEND_URL is not configured in environment variables.');
+        console.error('[proxy] ❌ BACKEND_URL/NEXT_PUBLIC_API_URL is not configured in environment variables.');
         return NextResponse.json(
-            { error: 'Server misconfiguration: BACKEND_URL is not set. Set it in Vercel Environment Variables.' },
+            { error: 'Server misconfiguration: BACKEND_URL or NEXT_PUBLIC_API_URL is not set. Set it in Vercel Environment Variables.' },
             { status: 500 }
         );
     }

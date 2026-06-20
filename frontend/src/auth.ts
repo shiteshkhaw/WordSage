@@ -9,11 +9,26 @@ if (!NEXTAUTH_SECRET) {
     console.error("❌ AUTH_SECRET / NEXTAUTH_SECRET is not set. Authentication will fail.");
 }
 
-// For server-side auth calls, use BACKEND_URL (Docker runtime)
-// STRICT MODE: No fallback to client-side vars.
-const API_URL = process.env.BACKEND_URL;
+const isLocalUrl = (url?: string) => {
+    if (!url) return true;
+    return url.includes('localhost') || url.includes('127.0.0.1') || url.includes('wordsage-backend');
+};
+
+const getApiUrl = () => {
+    const backendUrl = process.env.BACKEND_URL;
+    const publicUrl = process.env.NEXT_PUBLIC_API_URL;
+    if (process.env.VERCEL) {
+        if (backendUrl && !isLocalUrl(backendUrl)) {
+            return backendUrl;
+        }
+        return publicUrl || '';
+    }
+    return backendUrl || publicUrl || 'http://localhost:4000';
+};
+
+const API_URL = getApiUrl();
 if (!API_URL) {
-    throw new Error("❌ BACKEND_URL is not set in environment. Required for server-side auth.");
+    throw new Error("❌ API_URL could not be resolved. Ensure NEXT_PUBLIC_API_URL or BACKEND_URL is set in environment.");
 }
 
 export const { handlers, auth, signIn, signOut } = NextAuth({

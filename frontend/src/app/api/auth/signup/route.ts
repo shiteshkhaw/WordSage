@@ -13,10 +13,26 @@ export async function POST(req: Request) {
         }
 
         // Call backend API to create user
-        // Use BACKEND_URL (runtime, for Docker)
-        const backendUrl = process.env.BACKEND_URL;
+        const isLocalUrl = (url?: string) => {
+            if (!url) return true;
+            return url.includes('localhost') || url.includes('127.0.0.1') || url.includes('wordsage-backend');
+        };
+
+        const getBackendUrl = () => {
+            const bUrl = process.env.BACKEND_URL;
+            const pUrl = process.env.NEXT_PUBLIC_API_URL;
+            if (process.env.VERCEL) {
+                if (bUrl && !isLocalUrl(bUrl)) {
+                    return bUrl;
+                }
+                return pUrl || '';
+            }
+            return bUrl || pUrl || 'http://localhost:4000';
+        };
+
+        const backendUrl = getBackendUrl();
         if (!backendUrl) {
-            console.error("❌ BACKEND_URL is missing in API route");
+            console.error("❌ BACKEND_URL/NEXT_PUBLIC_API_URL could not be resolved in signup route");
             return NextResponse.json({ error: "Server Configuration Error" }, { status: 500 });
         }
 

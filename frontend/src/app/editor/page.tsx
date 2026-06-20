@@ -112,6 +112,7 @@ export default function EditorPage() {
   const [customPrompt, setCustomPrompt] = useState("");
 
   const [showTemplateLibrary, setShowTemplateLibrary] = useState(false);
+  const [showAISidebar, setShowAISidebar] = useState(true);
 
   const [userTeams, setUserTeams] = useState<any[]>([]);
   const [selectedTeam, setSelectedTeam] = useState<string | null>(null);
@@ -137,6 +138,10 @@ export default function EditorPage() {
       loadUserTeams();
     };
     checkUser();
+
+    if (window.innerWidth < 1024) {
+      setShowAISidebar(false);
+    }
 
     if (typeof window !== 'undefined') {
       const SpeechRecognition = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
@@ -647,9 +652,27 @@ export default function EditorPage() {
   };
 
   return (
-    <div className="flex h-screen bg-white">
+    <div className="flex h-screen bg-white relative overflow-hidden">
+      {/* Sidebar Backdrops on Mobile */}
+      {showDocList && (
+        <div
+          className="lg:hidden fixed inset-0 bg-black/40 z-20 transition-opacity"
+          onClick={() => setShowDocList(false)}
+        />
+      )}
+      {showAISidebar && (
+        <div
+          className="lg:hidden fixed inset-0 bg-black/40 z-20 transition-opacity"
+          onClick={() => setShowAISidebar(false)}
+        />
+      )}
+
       {/* Documents Sidebar */}
-      <div className={`${showDocList ? "w-80" : "w-0"} bg-slate-50 border-r border-slate-200 transition-all duration-300 overflow-hidden`}>
+      <div className={`
+        ${showDocList ? "w-80 border-r" : "w-0 border-r-0"} 
+        bg-slate-50 border-slate-200 transition-all duration-300 overflow-hidden flex flex-col shrink-0
+        max-lg:fixed max-lg:top-0 max-lg:bottom-0 max-lg:left-0 max-lg:z-30 max-lg:h-full max-lg:shadow-2xl
+      `}>
         <div className="p-6 border-b border-slate-200">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-bold text-slate-900">Documents</h3>
@@ -678,29 +701,29 @@ export default function EditorPage() {
       </div>
 
       {/* Main Editor */}
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col min-w-0">
         {/* Top Toolbar */}
-        <div className="h-auto bg-white border-b border-slate-200 px-8 py-4 sticky top-0 z-20 shadow-sm">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center space-x-4">
-              <button onClick={() => setShowDocList(!showDocList)} className="p-2 hover:bg-slate-100 rounded-lg" title="Documents">
+        <div className="h-auto bg-white border-b border-slate-200 px-4 sm:px-8 py-4 sticky top-0 z-10 shadow-sm">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-3">
+            <div className="flex items-center space-x-2 sm:space-x-4 overflow-x-auto py-1">
+              <button onClick={() => setShowDocList(!showDocList)} className="p-2 hover:bg-slate-100 rounded-lg shrink-0" title="Documents">
                 <svg className="w-6 h-6 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
                 </svg>
               </button>
-              <Link href="/dashboard" className="p-2 hover:bg-slate-100 rounded-lg" title="Dashboard">
+              <Link href="/dashboard" className="p-2 hover:bg-slate-100 rounded-lg shrink-0" title="Dashboard">
                 <svg className="w-6 h-6 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
                 </svg>
               </Link>
-              <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} className="text-lg font-bold text-slate-900 bg-transparent border-none focus:outline-none focus:ring-2 focus:ring-indigo-500 px-3 py-1 rounded min-w-[300px]" placeholder="Document title" />
+              <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} className="text-lg font-bold text-slate-900 bg-transparent border-none focus:outline-none focus:ring-2 focus:ring-indigo-500 px-3 py-1 rounded min-w-0 flex-1 sm:min-w-[300px]" placeholder="Document title" />
               {currentDoc && (
-                <button onClick={toggleFavorite} className="p-2 hover:bg-slate-100 rounded-lg" title={currentDoc.is_favorite ? "Remove from favorites" : "Add to favorites"}>
+                <button onClick={toggleFavorite} className="p-2 hover:bg-slate-100 rounded-lg shrink-0" title={currentDoc.is_favorite ? "Remove from favorites" : "Add to favorites"}>
                   <span className="text-xl">{currentDoc.is_favorite ? "⭐" : "☆"}</span>
                 </button>
               )}
             </div>
-            <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-2 sm:space-x-4 shrink-0 overflow-x-auto py-1 justify-end">
               {/* Collaborators online */}
               {collaborators.length > 0 && (
                 <div className="flex items-center -space-x-2 mr-2">
@@ -723,20 +746,30 @@ export default function EditorPage() {
                 </div>
               )}
 
-              <div className="flex items-center space-x-2 px-3 py-2 rounded-lg bg-slate-50">
+              <div className="flex items-center space-x-2 px-3 py-2 rounded-lg bg-slate-50 shrink-0">
                 {savedStatus === "saving" && <><div className="animate-spin rounded-full h-4 w-4 border-2 border-indigo-600 border-t-transparent"></div><span className="text-sm text-slate-600 font-medium">Saving...</span></>}
                 {savedStatus === "saved" && <><svg className="w-4 h-4 text-green-600" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg><span className="text-sm text-green-600 font-medium">Saved</span></>}
               </div>
-              <div className="flex items-center space-x-2 bg-gradient-to-r from-amber-50 to-orange-50 px-4 py-2 rounded-lg border border-amber-200 shadow-sm hover:shadow-md transition-shadow cursor-pointer" title="SkillsCoins Balance">
+              <div className="flex items-center space-x-2 bg-gradient-to-r from-amber-50 to-orange-50 px-4 py-2 rounded-lg border border-amber-200 shadow-sm hover:shadow-md transition-shadow cursor-pointer shrink-0" title="SkillsCoins Balance">
                 <svg className="w-5 h-5 text-orange-500" fill="currentColor" viewBox="0 0 20 20"><path d="M8.433 7.418c.155-.103.346-.196.567-.267v1.698a2.305 2.305 0 01-.567-.267C8.07 8.34 8 8.114 8 8c0-.114.07-.34.433-.582zM11 12.849v-1.698c.22.071.412.164.567.267.364.243.433.468.433.582 0 .114-.07.34-.433.582a2.305 2.305 0 01-.567.267z" /><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-13a1 1 0 10-2 0v.092a4.535 4.535 0 00-1.676.662C6.602 6.234 6 7.009 6 8c0 .99.602 1.765 1.324 2.246.48.32 1.054.545 1.676.662v1.941c-.391-.127-.68-.317-.843-.504a1 1 0 10-1.51 1.31c.562.649 1.413 1.076 2.353 1.253V15a1 1 0 102 0v-.092a4.535 4.535 0 001.676-.662C13.398 13.766 14 12.991 14 12c0-.99-.602-1.765-1.324-2.246A4.535 4.535 0 0011 9.092V7.151c.391.127.68.317.843.504a1 1 0 101.511-1.31c-.563-.649-1.413-1.076-2.354-1.253V5z" clipRule="evenodd" /></svg>
                 <span className="font-bold text-sm text-slate-900">{profile?.coins_balance || 0}</span>
               </div>
               {voiceSupported && (
-                <button onClick={toggleVoiceInput} className={`p-3 rounded-lg transition-all ${isListening ? "bg-red-100 text-red-600 animate-pulse" : "hover:bg-slate-100 text-slate-600"}`} title={isListening ? "Stop voice input" : "Start voice input"}>
+                <button onClick={toggleVoiceInput} className={`p-3 rounded-lg transition-all shrink-0 ${isListening ? "bg-red-100 text-red-600 animate-pulse" : "hover:bg-slate-100 text-slate-600"}`} title={isListening ? "Stop voice input" : "Start voice input"}>
                   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" /></svg>
                 </button>
               )}
-              <div className="relative group">
+              
+              {/* Toggle AI Sidebar */}
+              <button
+                onClick={() => setShowAISidebar(!showAISidebar)}
+                className={`p-3 rounded-lg transition-all shrink-0 ${showAISidebar ? "bg-indigo-100 text-indigo-600" : "hover:bg-slate-100 text-slate-600"}`}
+                title="Toggle AI Assistant"
+              >
+                <span className="text-xl">🤖</span>
+              </button>
+
+              <div className="relative group shrink-0">
                 <button className="p-3 hover:bg-slate-100 rounded-lg transition-colors flex items-center space-x-1" title="Export document">
                   <svg className="w-6 h-6 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
                   <svg className="w-4 h-4 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
@@ -749,8 +782,8 @@ export default function EditorPage() {
               </div>
             </div>
           </div>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
               <ModeSelector currentMode={selectedMode} onModeChange={handleModeChange} />
               <button onClick={() => setShowTemplateLibrary(true)} className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-purple-50 to-pink-50 border-2 border-purple-300 text-purple-700 rounded-lg font-semibold hover:shadow-md transition-all">
                 <span className="text-xl">📄</span><span>Templates</span>
@@ -784,7 +817,7 @@ export default function EditorPage() {
                 </div>
               )}
             </div>
-            <div className="flex items-center space-x-6 text-sm text-slate-600">
+            <div className="flex items-center space-x-4 text-xs sm:text-sm text-slate-600 overflow-x-auto py-1">
               <span>📄 {wordCount} words</span>
               <span>🔤 {charCount} chars</span>
               <span>⏱️ {readingTime} min</span>
@@ -869,14 +902,14 @@ export default function EditorPage() {
             onChange={handleTextareaChange}
             onSelect={handleTextareaSelect}
             placeholder="Start typing or use voice input... AI will optimize for your selected mode."
-            className="w-full h-full p-12 text-lg leading-relaxed font-medium text-slate-900 placeholder:text-slate-400 resize-none focus:outline-none border-none"
+            className="w-full h-full p-4 sm:p-8 md:p-12 text-lg leading-relaxed font-medium text-slate-900 placeholder:text-slate-400 resize-none focus:outline-none border-none"
             style={{ minHeight: "calc(100vh - 350px)" }}
           />
         </div>
 
         {/* Status Bar */}
-        <div className="h-12 bg-slate-50 border-t border-slate-200 flex items-center justify-between px-8 text-sm text-slate-600">
-          <div className="flex items-center space-x-8">
+        <div className="h-auto min-h-[3rem] py-2 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-2 px-4 sm:px-8 text-xs sm:text-sm text-slate-600">
+          <div className="flex flex-wrap items-center gap-4 justify-center sm:justify-start">
             {coinsUsed > 0 && <span>💰 {coinsUsed} coins used this session</span>}
             {isListening && <span className="text-red-600 font-bold animate-pulse">🎤 Listening...</span>}
             {selectedTeam && styleGuide && (
@@ -893,15 +926,26 @@ export default function EditorPage() {
       </div>
 
       {/* AI Tools Sidebar */}
-      <div className="w-96 bg-gradient-to-b from-slate-50 to-white border-l border-slate-200 flex flex-col overflow-hidden">
-        <div className="p-4 border-b border-slate-200 bg-white">
-          <h3 className="font-bold text-slate-900 flex items-center justify-between">
-            <span>🤖 AI Assistant</span>
-            {isProcessing && <div className="animate-spin rounded-full h-5 w-5 border-2 border-indigo-600 border-t-transparent"></div>}
-          </h3>
-          {styleGuide && (
-            <p className="text-xs text-indigo-600 mt-1">✨ Style guide will be applied to all AI actions</p>
-          )}
+      <div className={`
+        ${showAISidebar ? "w-96 border-l" : "w-0 border-l-0"} 
+        bg-gradient-to-b from-slate-50 to-white border-slate-200 flex flex-col overflow-hidden transition-all duration-300 shrink-0
+        max-lg:fixed max-lg:top-0 max-lg:bottom-0 max-lg:right-0 max-lg:z-30 max-lg:h-full max-lg:shadow-2xl
+      `}>
+        <div className="p-4 border-b border-slate-200 bg-white flex items-center justify-between">
+          <div>
+            <h3 className="font-bold text-slate-900 flex items-center space-x-2">
+              <span>🤖 AI Assistant</span>
+              {isProcessing && <div className="animate-spin rounded-full h-5 w-5 border-2 border-indigo-600 border-t-transparent"></div>}
+            </h3>
+            {styleGuide && (
+              <p className="text-xs text-indigo-600 mt-1">✨ Style guide will be applied to all AI actions</p>
+            )}
+          </div>
+          <button onClick={() => setShowAISidebar(false)} className="lg:hidden p-1 hover:bg-slate-100 rounded text-slate-500" title="Close AI Assistant">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
         </div>
 
         <div className="flex-1 overflow-y-auto">
