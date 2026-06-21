@@ -1,0 +1,48 @@
+name: Production Deployment
+
+on:
+  push:
+    branches: [ main ]
+    paths-ignore:
+      - 'README.md'
+      - 'docs/**'
+      - '.gitignore'
+      - '.dockerignore'
+      - '.github/workflows/backend-ci.yml'
+      - '.github/workflows/frontend-ci.yml'
+
+jobs:
+  db-migration:
+    name: Run Database Migrations
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install Dependencies
+        run: |
+          cd backend
+          npm ci
+
+      - name: Apply Database Migrations
+        run: |
+          cd backend
+          npx prisma migrate deploy
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+  deploy-backend:
+    name: Trigger Render Deploy
+    needs: db-migration
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Render Deploy Webhook
+        run: |
+          curl -f -X GET "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"

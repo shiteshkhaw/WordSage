@@ -89,9 +89,14 @@ teamsRouter.get('/', requireAuth, async (req: AuthenticatedRequest, res: Respons
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    // Get owned teams
+    // Get owned teams with active member count
     const ownedTeams = await prisma.teams.findMany({
       where: { owner_id: req.user.id },
+      include: {
+        team_members: {
+          where: { status: 'active' },
+        },
+      },
     });
 
     // Get teams where user is a member
@@ -101,13 +106,34 @@ teamsRouter.get('/', requireAuth, async (req: AuthenticatedRequest, res: Respons
         status: 'active',
       },
       include: {
-        team: true,
+        team: {
+          include: {
+            team_members: {
+              where: { status: 'active' },
+            },
+          },
+        },
       },
     });
 
     const teams = [
-      ...(ownedTeams || []).map((t: any) => ({ ...t, role: 'owner' })),
-      ...(memberTeams?.map((mt: any) => ({ ...mt.team, role: mt.role })) || []),
+      ...(ownedTeams || []).map((t: any) => {
+        const otherActiveMembers = t.team_members.filter((m: any) => m.user_id !== t.owner_id).length;
+        return {
+          ...t,
+          role: 'owner',
+          member_count: otherActiveMembers + 1,
+        };
+      }),
+      ...(memberTeams?.map((mt: any) => {
+        if (!mt.team) return null;
+        const otherActiveMembers = mt.team.team_members.filter((m: any) => m.user_id !== mt.team.owner_id).length;
+        return {
+          ...mt.team,
+          role: mt.role,
+          member_count: otherActiveMembers + 1,
+        };
+      }).filter(Boolean) || []),
     ];
 
     console.log('✅ Found', teams.length, 'teams');
