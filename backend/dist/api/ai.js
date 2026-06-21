@@ -61,39 +61,41 @@ aiRouter.post('/process', requireAuth, async (req, res) => {
         const newTotalRequests = (profile.total_ai_requests || 0) + 1;
         const wordCount = text.split(/\s+/).filter(Boolean).length;
         const newWordsProcessed = (profile.words_processed || 0) + wordCount;
-        await prisma.user_profiles.update({
-            where: { id: req.user.id },
-            data: {
-                coins_balance: newBalance,
-                total_ai_requests: newTotalRequests,
-                words_processed: newWordsProcessed
-            },
-        });
-        await prisma.transactions.create({
-            data: {
-                user_id: req.user.id,
-                action: `${action}_${mode || 'general'}`,
-                coins_used: coinsRequired,
-                details: {
-                    action,
-                    mode: mode || 'general',
-                    text_length: text.length,
-                    word_count: wordCount,
-                    tone: tone || 'default',
-                },
-            },
-        });
-        // Log to ai_usage_analytics for accurate daily stats
         const outputLength = normalizedResult.result?.length || 0;
-        await prisma.ai_usage_analytics.create({
-            data: {
-                user_id: req.user.id,
-                action_type: action,
-                input_length: text.length,
-                output_length: outputLength,
-                coins_spent: coinsRequired,
-            },
-        });
+        // Use a single database transaction for the three post-processing updates to eliminate extra ping latency
+        await prisma.$transaction([
+            prisma.user_profiles.update({
+                where: { id: req.user.id },
+                data: {
+                    coins_balance: newBalance,
+                    total_ai_requests: newTotalRequests,
+                    words_processed: newWordsProcessed
+                },
+            }),
+            prisma.transactions.create({
+                data: {
+                    user_id: req.user.id,
+                    action: `${action}_${mode || 'general'}`,
+                    coins_used: coinsRequired,
+                    details: {
+                        action,
+                        mode: mode || 'general',
+                        text_length: text.length,
+                        word_count: wordCount,
+                        tone: tone || 'default',
+                    },
+                },
+            }),
+            prisma.ai_usage_analytics.create({
+                data: {
+                    user_id: req.user.id,
+                    action_type: action,
+                    input_length: text.length,
+                    output_length: outputLength,
+                    coins_spent: coinsRequired,
+                },
+            })
+        ]);
         res.json({
             result: normalizedResult.result,
             coinsUsed: coinsRequired,
@@ -135,45 +137,102 @@ aiRouter.post('/advanced', requireAuth, async (req, res) => {
             });
         }
         const rawResult = await processAdvancedAIRequest(action, text, { citationStyle });
-        const normalizedResult = normalizeAIResponse(rawResult);
+        let resultPayload = {};
+        let outputLength = 0;
+        if (action === 'plagiarism_check') {
+            const plagiarismResult = rawResult.result;
+            resultPayload = {
+                similarity: plagiarismResult.similarity,
+                isPlagiarized: plagiarismResult.isPlagiarized,
+                sources: plagiarismResult.sources.map((s) => ({
+                    url: s.url,
+                    title: s.title,
+                    similarity: s.similarity
+                })),
+                message: plagiarismResult.analysis || 'Plagiarism check completed.'
+            };
+            outputLength = JSON.stringify(plagiarismResult).length;
+        }
+        else {
+            const normalizedResult = normalizeAIResponse(rawResult);
+            const textResult = normalizedResult.result;
+            outputLength = textResult.length;
+            if (action === 'rewrite_unique') {
+                resultPayload = {
+                    rewritten: textResult,
+                    message: 'Text successfully rewritten to be unique!'
+                };
+            }
+            else if (action === 'humanize') {
+                resultPayload = {
+                    humanized: textResult,
+                    message: 'Text successfully humanized!'
+                };
+            }
+            else if (action === 'bypass_detector') {
+                resultPayload = {
+                    bypassed: textResult,
+                    message: 'AI detection bypass complete!'
+                };
+            }
+            else if (action === 'generate_citation') {
+                resultPayload = {
+                    cited: textResult,
+                    message: 'Citation generated successfully!'
+                };
+            }
+        }
         const newBalance = profile.coins_balance - coinsRequired;
         const newTotalRequests = (profile.total_ai_requests || 0) + 1;
         const wordCount = text.split(/\s+/).filter(Boolean).length;
         const newWordsProcessed = (profile.words_processed || 0) + wordCount;
-        await prisma.user_profiles.update({
-            where: { id: req.user.id },
-            data: {
-                coins_balance: newBalance,
-                total_ai_requests: newTotalRequests,
-                words_processed: newWordsProcessed
-            },
-        });
-        await prisma.transactions.create({
-            data: {
-                user_id: req.user.id,
-                action: action,
-                coins_used: coinsRequired,
-                details: {
-                    action,
-                    text_length: text.length,
-                    word_count: wordCount,
+        // Use a single database transaction for post-processing AI logic
+        const transactionOps = [
+            prisma.user_profiles.update({
+                where: { id: req.user.id },
+                data: {
+                    coins_balance: newBalance,
+                    total_ai_requests: newTotalRequests,
+                    words_processed: newWordsProcessed
                 },
-            },
-        });
-        // Log to ai_usage_analytics for accurate daily stats
-        const outputLength = normalizedResult.result?.length || 0;
-        await prisma.ai_usage_analytics.create({
-            data: {
-                user_id: req.user.id,
-                action_type: action,
-                input_length: text.length,
-                output_length: outputLength,
-                coins_spent: coinsRequired,
-            },
-        });
+            }),
+            prisma.transactions.create({
+                data: {
+                    user_id: req.user.id,
+                    action: action,
+                    coins_used: coinsRequired,
+                    details: {
+                        action,
+                        text_length: text.length,
+                        word_count: wordCount,
+                    },
+                },
+            }),
+            prisma.ai_usage_analytics.create({
+                data: {
+                    user_id: req.user.id,
+                    action_type: action,
+                    input_length: text.length,
+                    output_length: outputLength,
+                    coins_spent: coinsRequired,
+                },
+            })
+        ];
+        if (action === 'plagiarism_check') {
+            transactionOps.push(prisma.plagiarism_checks.create({
+                data: {
+                    userId: req.user.id,
+                    originalText: text,
+                    similarityScore: rawResult.result.similarity,
+                    sources: rawResult.result.sources,
+                    coinsUsed: coinsRequired,
+                }
+            }));
+        }
+        await prisma.$transaction(transactionOps);
         res.json({
             success: true,
-            result: normalizedResult.result,
+            result: resultPayload,
             coinsUsed: coinsRequired,
             remainingCoins: newBalance,
         });
@@ -250,43 +309,44 @@ aiRouter.post('/team-process', requireAuth, async (req, res) => {
         const newBalance = profile.coins_balance - coinsRequired;
         const newTotalRequests = (profile.total_ai_requests || 0) + 1;
         const newWordsProcessed = (profile.words_processed || 0) + wordCount;
-        await prisma.user_profiles.update({
-            where: { id: req.user.id },
-            data: {
-                coins_balance: newBalance,
-                total_ai_requests: newTotalRequests,
-                words_processed: newWordsProcessed,
-            },
-        });
-        // Log transaction
-        await prisma.transactions.create({
-            data: {
-                user_id: req.user.id,
-                action: `${action}_${mode || 'general'}_team`,
-                coins_used: coinsRequired,
-                details: {
-                    action,
-                    mode: mode || 'general',
-                    team_id: teamId,
-                    style_guide_applied: result.styleGuideApplied,
-                    violations_count: result.violations.length,
-                    text_length: text.length,
-                    word_count: wordCount,
-                    tone: tone || 'default',
-                },
-            },
-        });
-        // Log to ai_usage_analytics for accurate daily stats
         const outputLength = typeof result.result === 'string' ? result.result.length : 0;
-        await prisma.ai_usage_analytics.create({
-            data: {
-                user_id: req.user.id,
-                action_type: `${action}_team`,
-                input_length: text.length,
-                output_length: outputLength,
-                coins_spent: coinsRequired,
-            },
-        });
+        // Combine updates into a single transaction to reduce ping overhead
+        await prisma.$transaction([
+            prisma.user_profiles.update({
+                where: { id: req.user.id },
+                data: {
+                    coins_balance: newBalance,
+                    total_ai_requests: newTotalRequests,
+                    words_processed: newWordsProcessed,
+                },
+            }),
+            prisma.transactions.create({
+                data: {
+                    user_id: req.user.id,
+                    action: `${action}_${mode || 'general'}_team`,
+                    coins_used: coinsRequired,
+                    details: {
+                        action,
+                        mode: mode || 'general',
+                        team_id: teamId,
+                        style_guide_applied: result.styleGuideApplied,
+                        violations_count: result.violations.length,
+                        text_length: text.length,
+                        word_count: wordCount,
+                        tone: tone || 'default',
+                    },
+                },
+            }),
+            prisma.ai_usage_analytics.create({
+                data: {
+                    user_id: req.user.id,
+                    action_type: `${action}_team`,
+                    input_length: text.length,
+                    output_length: outputLength,
+                    coins_spent: coinsRequired,
+                },
+            })
+        ]);
         // Normalize the team AI result
         const output = typeof result.result === 'string' ? result.result : String(result.result || '');
         if (!output) {

@@ -471,6 +471,16 @@ export async function processAIRequest(action, text, tone, mode, customPrompt) {
         custom: 0.5, // Balanced default
     };
     const temperature = temperatureMap[action] ?? 0.5;
+    // Adaptive token limits based on intended action to save time and prevent overgeneration
+    const tokenLimitsMap = {
+        fix_grammar: 1500,
+        improve: 2000,
+        rewrite: 2500,
+        summarize: 1000,
+        expand: 4096,
+        custom: 4096,
+    };
+    const maxTokens = tokenLimitsMap[action] ?? 2000;
     try {
         const completion = await client.chat.completions.create({
             model: OPENAI_MODEL,
@@ -479,7 +489,7 @@ export async function processAIRequest(action, text, tone, mode, customPrompt) {
                 { role: 'user', content: text },
             ],
             temperature,
-            max_tokens: 4096,
+            max_tokens: maxTokens,
         });
         const result = completion.choices[0]?.message?.content || '';
         return { result: cleanAIResponse(result), coinsUsed };
@@ -551,7 +561,7 @@ TARGET: 0% similarity to original in plagiarism checkers.`,
                         { role: 'user', content: text },
                     ],
                     temperature: 0.85,
-                    max_tokens: 4096,
+                    max_tokens: 2500,
                 });
                 const result = completion.choices[0]?.message?.content || '';
                 return { result: cleanAIResponse(result), coinsUsed };
@@ -608,7 +618,7 @@ TARGET: 100% human score on AI detection tools.`,
                         { role: 'user', content: text },
                     ],
                     temperature: 0.92,
-                    max_tokens: 4096,
+                    max_tokens: 2500,
                 });
                 const result = completion.choices[0]?.message?.content || '';
                 return { result: cleanAIResponse(result), coinsUsed };
@@ -667,7 +677,7 @@ TARGET: Undetectable by ALL AI detection systems. 0% AI probability.`,
                         { role: 'user', content: text },
                     ],
                     temperature: 0.95,
-                    max_tokens: 4096,
+                    max_tokens: 2500,
                 });
                 const result = completion.choices[0]?.message?.content || '';
                 return { result: cleanAIResponse(result), coinsUsed };

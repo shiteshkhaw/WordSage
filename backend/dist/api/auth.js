@@ -72,38 +72,41 @@ authRouter.post('/oauth', async (req, res) => {
         });
         // If user doesn't exist, create them
         if (!user) {
+            // Use Prisma nested writes to create user, profile, and initial transaction in a single database operation!
             user = await prisma.users.create({
                 data: {
                     email,
                     full_name: name || email.split('@')[0],
                     avatar_url: image || null,
                     subscription_tier: 'free',
-                    coin_balance: 0,
                     onboarding_completed: false,
                     preferences: {},
+                    user_profiles: {
+                        create: {
+                            coins_balance: 100, // Welcome bonus
+                            total_ai_requests: 0,
+                            words_processed: 0,
+                            daily_streak: 0,
+                            last_login_date: new Date(),
+                        }
+                    },
+                    transactions: {
+                        create: {
+                            action: 'welcome_bonus',
+                            coins_used: -100,
+                            details: { type: 'oauth_signup', provider: provider || 'unknown' },
+                        }
+                    },
+                    notifications: {
+                        create: {
+                            title: "🎉 Welcome Bonus!",
+                            message: "100 SkillsCoins credited to your account as a welcome gift!",
+                            type: "welcome"
+                        }
+                    }
                 },
             });
-            // Create user profile
-            await prisma.user_profiles.create({
-                data: {
-                    id: user.id,
-                    coins_balance: 100, // Welcome bonus
-                    total_ai_requests: 0,
-                    words_processed: 0,
-                    daily_streak: 0,
-                    last_login_date: new Date(),
-                },
-            });
-            // Grant welcome bonus transaction
-            await prisma.transactions.create({
-                data: {
-                    user_id: user.id,
-                    action: 'welcome_bonus',
-                    coins_used: -100,
-                    details: { type: 'oauth_signup', provider },
-                },
-            });
-            console.log(`✅ Created new OAuth user: ${email} (${provider})`);
+            console.log(`✅ Created new OAuth user via single transaction: ${email} (${provider})`);
         }
         else {
             // Update last login
@@ -141,20 +144,24 @@ authRouter.post('/signup', async (req, res) => {
         }
         // Hash password
         const hashedPassword = await bcrypt.hash(password, 12);
-        // Create user
+        // Use Prisma nested write to create user and profile in a single database operation
         const user = await prisma.users.create({
             data: {
                 email,
                 password: hashedPassword,
                 full_name: fullName,
-                coin_balance: 100,
-            },
-        });
-        // Create user profile separately
-        await prisma.user_profiles.create({
-            data: {
-                id: user.id,
-                coins_balance: 100,
+                user_profiles: {
+                    create: {
+                        coins_balance: 100,
+                    }
+                },
+                notifications: {
+                    create: {
+                        title: "🎉 Welcome Bonus!",
+                        message: "100 SkillsCoins credited to your account as a welcome gift!",
+                        type: "welcome"
+                    }
+                }
             },
         });
         res.json({

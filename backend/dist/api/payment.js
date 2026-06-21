@@ -195,7 +195,7 @@ paymentRouter.post('/verify-subscription', requireAuth, async (req, res) => {
             select: { coins_balance: true },
         });
         const newBalance = (profile?.coins_balance || 0) + coinsToAdd;
-        // Update user_profiles table
+        // Update user_profiles — single source of truth for coins
         await prisma.user_profiles.update({
             where: { id: req.user.id },
             data: {
@@ -204,13 +204,10 @@ paymentRouter.post('/verify-subscription', requireAuth, async (req, res) => {
                 razorpay_subscription_id: razorpay_subscription_id,
             },
         });
-        // ALSO update users table to keep in sync
+        // Sync subscription_tier to users table (not coin balance — that lives in user_profiles)
         await prisma.users.update({
             where: { id: req.user.id },
-            data: {
-                subscription_tier: tier,
-                coin_balance: newBalance,
-            },
+            data: { subscription_tier: tier },
         });
         // Log transaction
         await prisma.transactions.create({

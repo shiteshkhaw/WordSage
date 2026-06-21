@@ -3,7 +3,7 @@ export default function Head() {
   return (
     <>
         <title>WordSage - AI Writing Assistant</title>
-        <link rel="icon" href="/favicon.ico" />
+        <link rel="icon" href="/favicon.png" type="image/png" />
         {/* Add other meta tags below */}
         <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
         <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />

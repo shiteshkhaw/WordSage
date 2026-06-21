@@ -41,7 +41,7 @@ profileRouter.get('/', requireAuth, async (req, res) => {
                 avatar_url: userProfile.avatar_url,
                 // Prefer user_profiles subscription_tier (updated by webhooks), fallback to users table
                 subscription_tier: userProfile.user_profiles?.subscription_tier || userProfile.subscription_tier || 'free',
-                coin_balance: userProfile.coin_balance,
+                coin_balance: userProfile.user_profiles?.coins_balance || 0,
                 coins_balance: userProfile.user_profiles?.coins_balance || 0,
                 total_ai_requests: userProfile.user_profiles?.total_ai_requests || 0,
                 words_processed: userProfile.user_profiles?.words_processed || 0,

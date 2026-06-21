@@ -27,7 +27,6 @@ razorpayRouter.post('/create-subscription', requireAuth, async (req, res) => {
             select: { razorpay_subscription_id: true, subscription_tier: true },
         });
         if (!profile) {
-            // Create profile if doesn't exist
             const newProfile = await prisma.user_profiles.create({
                 data: {
                     id: req.user.id,
@@ -83,13 +82,23 @@ async function handleSubscriptionCreation(profile, user, planId, razorpay, prism
                 created_from: 'web_app',
             },
         });
-        // Save subscription to database
         const planName = planId.toLowerCase().includes('team') ? 'Team' : 'Pro';
-        await prisma.subscriptions.create({
-            data: {
+        // Upsert subscription record — avoids duplicate on retry
+        await prisma.subscriptions.upsert({
+            where: { user_id: user.id },
+            update: {
+                razorpay_subscription_id: subscription.id,
+                razorpay_customer_id: customerId,
+                plan_name: planName,
+                status: subscription.status,
+                current_period_start: new Date(subscription.start_at * 1000),
+                current_period_end: subscription.end_at ? new Date(subscription.end_at * 1000) : null,
+                updated_at: new Date(),
+            },
+            create: {
                 user_id: user.id,
-                stripe_subscription_id: subscription.id,
-                stripe_customer_id: customerId,
+                razorpay_subscription_id: subscription.id,
+                razorpay_customer_id: customerId,
                 plan_name: planName,
                 status: subscription.status,
                 current_period_start: new Date(subscription.start_at * 1000),
@@ -114,38 +123,43 @@ async function handleSubscriptionCreation(profile, user, planId, razorpay, prism
     }
 }
 // POST /api/razorpay/webhook
-// Note: Raw body parser is applied in index.ts before this route
+// Note: Raw body parser is applied in index.ts BEFORE this route (express.raw)
+// This is required for HMAC-SHA256 signature verification to work correctly.
 razorpayRouter.post('/webhook', async (req, res) => {
     try {
-        const body = req.body.toString();
+        const body = req.body.toString(); // Buffer from express.raw()
         const signature = req.headers['x-razorpay-signature'];
         if (!signature) {
-            return res.status(400).json({ error: 'Missing signature' });
+            return res.status(400).json({ error: 'Missing webhook signature' });
         }
         const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
+        if (!webhookSecret) {
+            console.error('RAZORPAY_WEBHOOK_SECRET not configured');
+            return res.status(500).json({ error: 'Webhook secret not configured' });
+        }
+        // Verify HMAC-SHA256 signature against raw bytes
         const expectedSignature = crypto
             .createHmac('sha256', webhookSecret)
             .update(body)
             .digest('hex');
         if (signature !== expectedSignature) {
+            console.warn('Webhook signature mismatch — possible tampering attempt');
             return res.status(400).json({ error: 'Invalid signature' });
         }
         const event = JSON.parse(body);
-        console.log('Webhook received:', event.event);
+        console.log('✅ Webhook verified:', event.event);
         switch (event.event) {
             case 'subscription.activated': {
                 const subscription = event.payload.subscription.entity;
                 const userId = subscription.notes?.user_id;
-                if (!userId)
+                if (!userId) {
+                    console.warn('subscription.activated: no user_id in notes');
                     break;
-                const planId = subscription.plan_id;
-                let tier = 'pro';
-                let coins = 1000;
-                if (planId.toLowerCase().includes('team')) {
-                    tier = 'team';
-                    coins = 5000;
                 }
-                // Update user_profiles
+                const planId = subscription.plan_id;
+                const tier = planId.toLowerCase().includes('team') ? 'team' : 'pro';
+                const coins = tier === 'team' ? 5000 : 1000;
+                // Update user_profiles — single source of truth for coins
                 await prisma.user_profiles.update({
                     where: { id: userId },
                     data: {
@@ -154,35 +168,48 @@ razorpayRouter.post('/webhook', async (req, res) => {
                         coins_balance: coins,
                     },
                 });
-                // ALSO update users table to keep in sync
+                // Sync tier to users table (coins only live in user_profiles)
                 await prisma.users.update({
                     where: { id: userId },
-                    data: {
-                        subscription_tier: tier,
-                        coin_balance: coins,
-                    },
+                    data: { subscription_tier: tier },
                 });
-                await prisma.subscriptions.update({
-                    where: { stripe_subscription_id: subscription.id },
-                    data: { status: 'active' },
+                // Update subscription record
+                await prisma.subscriptions.updateMany({
+                    where: { razorpay_subscription_id: subscription.id },
+                    data: { status: 'active', updated_at: new Date() },
                 });
-                console.log(`Subscription activated for user ${userId}: ${tier}`);
+                console.log(`✅ Subscription activated for user ${userId}: ${tier} (${coins} coins)`);
                 break;
             }
             case 'subscription.charged': {
                 const payment = event.payload.payment.entity;
                 const subscription = event.payload.subscription.entity;
                 const sub = await prisma.subscriptions.findUnique({
-                    where: { stripe_subscription_id: subscription.id },
+                    where: { razorpay_subscription_id: subscription.id },
                     select: { user_id: true },
                 });
                 if (sub && payment.status === 'captured') {
                     const tier = subscription.plan_id.toLowerCase().includes('team') ? 'team' : 'pro';
                     const coins = tier === 'team' ? 5000 : 1000;
+                    // Renewal: replenish coins in user_profiles
                     await prisma.user_profiles.update({
                         where: { id: sub.user_id },
                         data: { coins_balance: coins },
                     });
+                    // Log the renewal credit
+                    await prisma.transactions.create({
+                        data: {
+                            user_id: sub.user_id,
+                            action: `subscription_renewal_${tier}`,
+                            coins_used: -coins,
+                            details: {
+                                type: 'subscription_renewal',
+                                payment_id: payment.id,
+                                subscription_id: subscription.id,
+                            },
+                        },
+                    });
+                    console.log(`✅ Subscription charged — ${coins} coins renewed for user ${sub.user_id}`);
                 }
                 break;
             }
@@ -190,11 +217,11 @@ razorpayRouter.post('/webhook', async (req, res) => {
             case 'subscription.halted': {
                 const subscription = event.payload.subscription.entity;
                 const sub = await prisma.subscriptions.findUnique({
-                    where: { stripe_subscription_id: subscription.id },
+                    where: { razorpay_subscription_id: subscription.id },
                     select: { user_id: true },
                 });
                 if (sub) {
-                    // Update user_profiles
+                    // Downgrade: reset to free tier in user_profiles
                     await prisma.user_profiles.update({
                         where: { id: sub.user_id },
                         data: {
@@ -202,19 +229,16 @@ razorpayRouter.post('/webhook', async (req, res) => {
                             coins_balance: 100,
                         },
                     });
-                    // ALSO update users table to keep in sync
+                    // Sync tier to users table
                     await prisma.users.update({
                         where: { id: sub.user_id },
-                        data: {
-                            subscription_tier: 'free',
-                            coin_balance: 100,
-                        },
+                        data: { subscription_tier: 'free' },
                     });
                     await prisma.subscriptions.update({
-                        where: { stripe_subscription_id: subscription.id },
-                        data: { status: 'canceled' },
+                        where: { razorpay_subscription_id: subscription.id },
+                        data: { status: 'canceled', updated_at: new Date() },
                     });
-                    console.log(`Subscription cancelled for user ${sub.user_id}`);
+                    console.log(`✅ Subscription ${event.event} for user ${sub.user_id} — downgraded to free`);
                 }
                 break;
             }
@@ -223,11 +247,20 @@ razorpayRouter.post('/webhook', async (req, res) => {
                 if (!payment.subscription_id)
                     break;
                 const sub = await prisma.subscriptions.findUnique({
-                    where: { stripe_subscription_id: payment.subscription_id },
+                    where: { razorpay_subscription_id: payment.subscription_id },
                     select: { user_id: true },
                 });
                 if (sub) {
-                    // Could add notification logic here
+                    // Create an in-app notification for payment failure
+                    await prisma.notifications.create({
+                        data: {
+                            user_id: sub.user_id,
+                            title: '⚠️ Payment Failed',
+                            message: 'Your subscription payment failed. Please update your payment method to continue.',
+                            type: 'warning',
+                        },
+                    });
+                    console.log(`⚠️ Payment failed for user ${sub.user_id} — notification sent`);
                 }
                 break;
             }
