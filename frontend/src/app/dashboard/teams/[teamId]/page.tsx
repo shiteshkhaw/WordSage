@@ -51,6 +51,7 @@ export default function TeamDashboard() {
   const [team, setTeam] = useState<Team | null>(null);
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [contentLibrary, setContentLibrary] = useState<ContentLibraryItem[]>([]);
+  const [documents, setDocuments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [userRole, setUserRole] = useState<string>("");
   const [showInviteModal, setShowInviteModal] = useState(false);
@@ -73,7 +74,7 @@ export default function TeamDashboard() {
 
   const loadTeamData = async () => {
     try {
-      const response = await apiFetch<{ data: { team: Team; userRole: string; members: TeamMember[]; contentLibrary: ContentLibraryItem[] } }>(`/api/teams/${teamId}`);
+      const response = await apiFetch<{ data: { team: Team; userRole: string; members: TeamMember[]; contentLibrary: ContentLibraryItem[]; documents?: any[] } }>(`/api/teams/${teamId}`);
       if (!response?.data) {
         router.push("/dashboard/teams");
         return;
@@ -83,6 +84,7 @@ export default function TeamDashboard() {
       setUserRole(response.data.userRole);
       setMembers(response.data.members || []);
       setContentLibrary(response.data.contentLibrary || []);
+      setDocuments(response.data.documents || []);
 
     } catch (error: any) {
       console.error("Load team error:", error);
@@ -304,6 +306,66 @@ export default function TeamDashboard() {
             </div>
           ))}
         </div>
+      </div>
+
+      {/* Team Documents Section */}
+      <div className="bg-white rounded-2xl p-8 border border-slate-200 shadow-lg shadow-slate-200/50">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
+            Team Documents
+            <span className="text-sm font-normal text-slate-500 bg-slate-100 px-3 py-1 rounded-full">
+              {documents.length}
+            </span>
+          </h2>
+          <Link
+            href={`/dashboard/teams/${teamId}/editor`}
+            className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg font-bold hover:shadow-md transition-all text-sm"
+          >
+            + Create Document
+          </Link>
+        </div>
+
+        {documents.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {documents.map((doc) => (
+              <Link
+                key={doc.id}
+                href={`/dashboard/teams/${teamId}/editor?docId=${doc.id}`}
+                className="p-5 bg-gradient-to-br from-slate-50 to-white rounded-xl border border-slate-200 hover:border-indigo-300 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 group block"
+              >
+                <div className="flex items-start justify-between mb-3">
+                  <h3 className="font-bold text-slate-900 group-hover:text-indigo-700 transition-colors line-clamp-1">
+                    {doc.title || "Untitled Document"}
+                  </h3>
+                  <span className="text-xs text-slate-400 font-medium">
+                    {new Date(doc.updated_at).toLocaleDateString()}
+                  </span>
+                </div>
+                <p className="text-sm text-slate-600 mb-4 line-clamp-2 leading-relaxed">
+                  {doc.content ? doc.content.replace(/<[^>]+>/g, '') : "No content yet"}
+                </p>
+                <div className="flex items-center justify-between text-xs text-slate-400 font-medium">
+                  <span className="bg-slate-100 px-2 py-1 rounded text-slate-500">
+                    {doc.word_count} words
+                  </span>
+                  <span className="text-indigo-600 group-hover:underline font-bold">
+                    Edit &rarr;
+                  </span>
+                </div>
+              </Link>
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-12 rounded-xl border-2 border-dashed border-slate-200 bg-slate-50/50">
+            <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3 text-slate-400">
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+            </div>
+            <p className="text-lg font-medium text-slate-900 mb-1">No team documents yet</p>
+            <p className="text-sm text-slate-500">Create a collaborative document to start writing with your team.</p>
+          </div>
+        )}
       </div>
 
       {/* Content Library Section */}

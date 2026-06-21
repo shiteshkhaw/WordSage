@@ -304,6 +304,17 @@ teamsRouter.get('/:teamId', requireAuth, async (req: AuthenticatedRequest, res: 
       take: 10,
     });
 
+    // Get team documents
+    const documents = await prisma.documents.findMany({
+      where: {
+        metadata: {
+          path: ['team_id'],
+          equals: teamId,
+        },
+      },
+      orderBy: { updated_at: 'desc' },
+    });
+
     console.log('✅ Team data fetched successfully');
     res.json({
       data: {
@@ -311,6 +322,7 @@ teamsRouter.get('/:teamId', requireAuth, async (req: AuthenticatedRequest, res: 
         userRole,
         members: formattedMembers,
         contentLibrary,
+        documents,
       },
     });
 

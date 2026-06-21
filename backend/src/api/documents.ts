@@ -8,8 +8,26 @@ export const docsRouter = Router();
 // Get all documents for authenticated user
 docsRouter.get('/', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
     try {
+        const activeTeams = await prisma.team_members.findMany({
+            where: {
+                user_id: req.user!.id,
+                status: 'active',
+            },
+        });
+        const teamIds = activeTeams.map((t) => t.team_id);
+
         const documents = await prisma.documents.findMany({
-            where: { user_id: req.user!.id },
+            where: {
+                OR: [
+                    { user_id: req.user!.id },
+                    ...teamIds.map((teamId) => ({
+                        metadata: {
+                            path: ['team_id'],
+                            equals: teamId,
+                        },
+                    })),
+                ],
+            },
             orderBy: { updated_at: 'desc' },
         });
 
@@ -26,7 +44,6 @@ docsRouter.get('/:id', requireAuth, async (req: AuthenticatedRequest, res: Respo
         const document = await prisma.documents.findFirst({
             where: {
                 id: req.params.id,
-                user_id: req.user!.id,
             },
         });
 
@@ -34,7 +51,27 @@ docsRouter.get('/:id', requireAuth, async (req: AuthenticatedRequest, res: Respo
             return res.status(404).json({ error: 'Document not found' });
         }
 
-        res.json({ data: document });
+        // If user is owner, allow access
+        if (document.user_id === req.user!.id) {
+            return res.json({ data: document });
+        }
+
+        // Otherwise, check if it's a team document and user is an active team member
+        const meta = document.metadata as any;
+        if (meta?.team_id) {
+            const membership = await prisma.team_members.findFirst({
+                where: {
+                    team_id: meta.team_id,
+                    user_id: req.user!.id,
+                    status: 'active',
+                },
+            });
+            if (membership) {
+                return res.json({ data: document });
+            }
+        }
+
+        res.status(404).json({ error: 'Document not found' });
     } catch (error: any) {
         console.error('Get document error:', error);
         res.status(500).json({ error: 'Failed to fetch document' });
@@ -44,7 +81,23 @@ docsRouter.get('/:id', requireAuth, async (req: AuthenticatedRequest, res: Respo
 // Create document
 docsRouter.post('/', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
     try {
-        const { title, content, word_count, char_count } = req.body;
+        const { title, content, word_count, char_count, team_id } = req.body;
+
+        let metadata = {};
+        if (team_id) {
+            // Check team membership
+            const membership = await prisma.team_members.findFirst({
+                where: {
+                    team_id,
+                    user_id: req.user!.id,
+                    status: 'active',
+                },
+            });
+            if (!membership) {
+                return res.status(403).json({ error: 'You are not an active member of this team' });
+            }
+            metadata = { team_id };
+        }
 
         // Calculate word count and char count if not provided
         const contentStr = content || '';
@@ -58,6 +111,7 @@ docsRouter.post('/', requireAuth, async (req: AuthenticatedRequest, res: Respons
                 content: contentStr,
                 word_count: calculatedWordCount,
                 char_count: calculatedCharCount,
+                metadata,
             },
         });
 
@@ -71,17 +125,51 @@ docsRouter.post('/', requireAuth, async (req: AuthenticatedRequest, res: Respons
 // Update document
 docsRouter.put('/:id', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
     try {
-        const { title, content, word_count, char_count } = req.body;
+        const { title, content, word_count, char_count, team_id } = req.body;
 
         const document = await prisma.documents.findFirst({
-            where: {
-                id: req.params.id,
-                user_id: req.user!.id,
-            },
+            where: { id: req.params.id },
         });
 
         if (!document) {
             return res.status(404).json({ error: 'Document not found' });
+        }
+
+        // Verify write access (owner or active team member)
+        let isAuthorized = document.user_id === req.user!.id;
+        
+        const meta = document.metadata as any;
+        if (!isAuthorized && meta?.team_id) {
+            const membership = await prisma.team_members.findFirst({
+                where: {
+                    team_id: meta.team_id,
+                    user_id: req.user!.id,
+                    status: 'active',
+                },
+            });
+            if (membership) {
+                isAuthorized = true;
+            }
+        }
+
+        if (!isAuthorized) {
+            return res.status(403).json({ error: 'You do not have permission to modify this document' });
+        }
+
+        // Check team membership if updating/setting team_id
+        let newMetadata = { ...(document.metadata as object) };
+        if (team_id) {
+            const membership = await prisma.team_members.findFirst({
+                where: {
+                    team_id,
+                    user_id: req.user!.id,
+                    status: 'active',
+                },
+            });
+            if (!membership) {
+                return res.status(403).json({ error: 'You are not an active member of this team' });
+            }
+            newMetadata = { ...newMetadata, team_id };
         }
 
         // Calculate word count and char count if not provided
@@ -95,6 +183,7 @@ docsRouter.put('/:id', requireAuth, async (req: AuthenticatedRequest, res: Respo
                 content,
                 word_count: calculatedWordCount,
                 char_count: calculatedCharCount,
+                metadata: newMetadata,
                 updated_at: new Date(),
             },
         });
@@ -110,14 +199,33 @@ docsRouter.put('/:id', requireAuth, async (req: AuthenticatedRequest, res: Respo
 docsRouter.delete('/:id', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
     try {
         const document = await prisma.documents.findFirst({
-            where: {
-                id: req.params.id,
-                user_id: req.user!.id,
-            },
+            where: { id: req.params.id },
         });
 
         if (!document) {
             return res.status(404).json({ error: 'Document not found' });
+        }
+
+        // Verify delete access (owner or team owner/admin)
+        let isAuthorized = document.user_id === req.user!.id;
+        
+        const meta = document.metadata as any;
+        if (!isAuthorized && meta?.team_id) {
+            const membership = await prisma.team_members.findFirst({
+                where: {
+                    team_id: meta.team_id,
+                    user_id: req.user!.id,
+                    role: { in: ['owner', 'admin'] },
+                    status: 'active',
+                },
+            });
+            if (membership) {
+                isAuthorized = true;
+            }
+        }
+
+        if (!isAuthorized) {
+            return res.status(403).json({ error: 'You do not have permission to delete this document' });
         }
 
         await prisma.documents.delete({

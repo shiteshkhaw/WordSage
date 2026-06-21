@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { apiFetch } from "@/lib/api";
 import { useEditor, EditorContent, Extension } from "@tiptap/react";
@@ -13,6 +13,14 @@ import { motion, AnimatePresence } from "framer-motion";
 import toast, { Toaster } from "react-hot-toast";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
+import {
+  getPresenceSocket,
+  joinDocument,
+  leaveDocument,
+  emitCursorUpdate,
+  emitTyping,
+  PresenceUser
+} from "@/lib/socket";
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -83,12 +91,14 @@ const STATUS_LABELS = {
 export default function PremiumTeamEditor() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const queryDocId = searchParams.get("docId");
   const { data: session, status } = useSession();
   const user = session?.user;
   const teamId = params.teamId as string;
 
   const [title, setTitle] = useState("Untitled Strategy Doc");
-  const [docId, setDocId] = useState<string | null>(null);
+  const [docId, setDocId] = useState<string | null>(queryDocId);
   const [styleGuide, setStyleGuide] = useState<StyleGuide | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
@@ -110,7 +120,11 @@ export default function PremiumTeamEditor() {
   const [isProcessingAI, setIsProcessingAI] = useState(false);
 
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const presenceIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const docIdRef = useRef<string | null>(docId);
+
+  useEffect(() => {
+    docIdRef.current = docId;
+  }, [docId]);
 
   const editor = useEditor({
     extensions: [
@@ -131,8 +145,45 @@ export default function PremiumTeamEditor() {
       const text = editor.getText();
       checkCompliance(text);
       triggerAutoSave();
+
+      const currentDocId = docIdRef.current;
+      if (currentDocId) {
+        const socket = getPresenceSocket("dummy-token");
+        emitTyping(socket, currentDocId, true);
+        if ((window as any).typingTimeout) clearTimeout((window as any).typingTimeout);
+        (window as any).typingTimeout = setTimeout(() => {
+          emitTyping(socket, currentDocId, false);
+        }, 2000);
+      }
+    },
+    onSelectionUpdate: ({ editor }) => {
+      const currentDocId = docIdRef.current;
+      if (currentDocId) {
+        const socket = getPresenceSocket("dummy-token");
+        emitCursorUpdate(socket, currentDocId, editor.state.selection.anchor);
+      }
     },
   });
+
+  const loadDocument = useCallback(async (id: string) => {
+    if (!editor) return;
+    try {
+      const res = await apiFetch(`/api/documents/${id}`) as { data?: { title: string; content: string } } | null;
+      if (res?.data) {
+        setTitle(res.data.title || "Untitled Strategy Doc");
+        editor.commands.setContent(res.data.content || "");
+      }
+    } catch (e) {
+      toast.error("Failed to load document content");
+    }
+  }, [editor]);
+
+  // Load document content once editor is loaded
+  useEffect(() => {
+    if (docId && editor) {
+      loadDocument(docId);
+    }
+  }, [docId, editor, loadDocument]);
 
   useEffect(() => {
     if (status === "loading") return;
@@ -157,21 +208,69 @@ export default function PremiumTeamEditor() {
       } catch (e) { }
     };
     init();
+  }, [session, status, teamId, user, router]);
 
-    // Set up presence heartbeat
-    presenceIntervalRef.current = setInterval(() => {
-      updatePresence();
-    }, 10000);
+  // WebSockets Presence & Content Sync
+  useEffect(() => {
+    if (!docId || !user || !editor) {
+      setCollaborators([]);
+      return;
+    }
 
-    // Initial presence
-    updatePresence();
+    const socket = getPresenceSocket("dummy-token");
+
+    joinDocument(socket, docId, teamId);
+
+    // Track if update is incoming to prevent infinite loops
+    let isIncomingUpdate = false;
+
+    socket.on("presence_updated", (payload: { documentId: string; users: PresenceUser[] }) => {
+      if (payload.documentId === docId) {
+        // Filter out current user from collaborators bubbles
+        const collabs = payload.users
+          .filter((u) => u.userId !== user.id)
+          .map((u) => ({
+            id: u.userId,
+            user_id: u.userId,
+            user_name: u.userName,
+            user_email: u.userEmail,
+            cursor_pos: u.cursorPos || undefined,
+            initials: u.userName.substring(0, 2).toUpperCase(),
+            color: u.color,
+          }));
+        setCollaborators(collabs);
+      }
+    });
+
+    socket.on("content_updated", (payload: { content: string; userId: string }) => {
+      if (payload.userId !== user.id) {
+        isIncomingUpdate = true;
+        // Keep selection if possible
+        const { from, to } = editor.state.selection;
+        editor.commands.setContent(payload.content, { emitUpdate: false });
+        try {
+          editor.commands.setTextSelection({ from, to });
+        } catch (_) {}
+        isIncomingUpdate = false;
+      }
+    });
+
+    // Listen to editor updates to broadcast content changes
+    const onEditorUpdate = () => {
+      if (isIncomingUpdate) return;
+      const html = editor.getHTML();
+      socket.emit("content_update", { documentId: docId, content: html });
+    };
+
+    editor.on("update", onEditorUpdate);
 
     return () => {
-      if (presenceIntervalRef.current) {
-        clearInterval(presenceIntervalRef.current);
-      }
+      editor.off("update", onEditorUpdate);
+      leaveDocument(socket, docId);
+      socket.off("presence_updated");
+      socket.off("content_updated");
     };
-  }, [session, status, teamId]);
+  }, [docId, user, editor, teamId]);
 
   // Load data when docId changes
   useEffect(() => {
@@ -179,34 +278,8 @@ export default function PremiumTeamEditor() {
       loadVersions();
       loadComments();
       loadApproval();
-      loadCollaborators();
     }
   }, [docId]);
-
-  // === PRESENCE ===
-  const updatePresence = async () => {
-    if (!docId || !user) return;
-    try {
-      await apiFetch(`/api/team-editor/${teamId}/documents/${docId}/presence`, {
-        method: 'POST',
-        body: JSON.stringify({ cursorPos: editor?.state?.selection?.anchor }),
-      });
-    } catch (e) { }
-  };
-
-  const loadCollaborators = async () => {
-    if (!docId) return;
-    try {
-      const res = await apiFetch(`/api/team-editor/${teamId}/documents/${docId}/presence`) as { data?: any[] } | null;
-      if (res?.data) {
-        const collabs = res.data.map((p: any) => ({
-          ...p,
-          initials: (p.user_name || p.user_email || 'U').substring(0, 2).toUpperCase(),
-        }));
-        setCollaborators(collabs);
-      }
-    } catch (e) { }
-  };
 
   // === VERSION HISTORY ===
   const loadVersions = async () => {
@@ -394,7 +467,9 @@ export default function PremiumTeamEditor() {
           body: JSON.stringify(payload),
         }) as { data?: { id?: string } } | null;
         if (response?.data?.id) {
-          setDocId(response.data.id);
+          const newDocId = response.data.id;
+          setDocId(newDocId);
+          router.replace(`/dashboard/teams/${teamId}/editor?docId=${newDocId}`);
         }
       }
 

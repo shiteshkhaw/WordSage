@@ -277,6 +277,16 @@ export function initSocketIO(httpServer: HttpServer): SocketIOServer {
       });
     });
 
+    // ── content_update ──────────────────────────────────────────────────────
+    socket.on('content_update', ({ documentId, content }: { documentId: string; content: string }) => {
+      if (!documentId) return;
+      socket.to(`doc:${documentId}`).emit('content_updated', {
+        content,
+        userId,
+        userName,
+      });
+    });
+
     // ── disconnect ─────────────────────────────────────────────────────────
     socket.on('disconnect', async () => {
       const meta = socketMeta.get(socket.id);
